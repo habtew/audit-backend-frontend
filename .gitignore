@@ -1,0 +1,47 @@
+# Node
+node_modules/
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Vite / build outputs
+dist/
+build/
+.vite/
+
+# Env files (keep examples)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# TypeScript
+*.tsbuildinfo
+
+# Logs and coverage
+logs/
+*.log
+coverage/
+
+# IDEs and editors
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# macOS / Windows
+.DS_Store
+Thumbs.db
+
+# Caches
+.cache/
+.parcel-cache/
+
+# Misc
+.yarn-integrity
+/.pnp
+/.pnp.js
+.history
