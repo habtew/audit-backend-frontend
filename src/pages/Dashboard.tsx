@@ -6,61 +6,76 @@ import {
   CurrencyDollarIcon,
   ClockIcon,
   CheckCircleIcon,
+  DocumentTextIcon,
 } from '@heroicons/react/24/outline';
 import { LineChart, Line, PieChart, Pie, Cell, Tooltip, ResponsiveContainer, CartesianGrid, XAxis, YAxis } from 'recharts';
 import apiClient from '../utils/api';
 import LoadingSpinner from '../components/Common/LoadingSpinner';
-import { DashboardStats } from '../types';
+import { 
+  DashboardOverview, 
+  DashboardActivity, 
+  DashboardKPIs 
+} from '../types';
+
+// Internal state type to hold all dashboard data
+interface DashboardData {
+  overview: DashboardOverview | null;
+  activity: DashboardActivity[];
+  kpis: DashboardKPIs | null;
+  deadlines: any[]; // Combined list
+  engagementStatus: Record<string, number>;
+}
 
 const Dashboard: React.FC = () => {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [data, setData] = useState<DashboardData>({
+    overview: null,
+    activity: [],
+    kpis: null,
+    deadlines: [],
+    engagementStatus: {},
+  });
   const [loading, setLoading] = useState(true);
 
-  // Helper to handle various API response structures
+  // Helper to safely extract data property
   const safeExtract = (res: any, isArray = false) => {
-    // If res is null/undefined
-    if (!res) return isArray ? [] : {};
-    
-    // If res.data exists, use that, otherwise use res itself
-    const data = res.data !== undefined ? res.data : res;
-    
-    if (isArray) {
-      return Array.isArray(data) ? data : [];
-    }
-    return data || {};
+    const val = res?.data !== undefined ? res.data : res;
+    if (isArray) return Array.isArray(val) ? val : [];
+    return val || (isArray ? [] : {});
   };
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        const [overviewRes, activityRes, deadlinesRes] = await Promise.all([
+        const [overviewRes, activityRes, deadlinesRes, kpisRes, statusRes] = await Promise.all([
           apiClient.getDashboardOverview(),
           apiClient.getRecentActivity(),
           apiClient.getUpcomingDeadlines(),
+          apiClient.getKPIs(),
+          apiClient.getEngagementStatus()
         ]);
 
         const overview = safeExtract(overviewRes);
         const activity = safeExtract(activityRes, true);
-        const deadlines = safeExtract(deadlinesRes, true);
+        const kpis = safeExtract(kpisRes);
+        const status = safeExtract(statusRes);
+        
+        // Process deadlines: combine engagements and pbcRequests
+        const rawDeadlines = safeExtract(deadlinesRes);
+        const combinedDeadlines = [
+          ...(rawDeadlines.engagements || []).map((d: any) => ({ ...d, type: 'Engagement' })),
+          ...(rawDeadlines.pbcRequests || []).map((d: any) => ({ ...d, type: 'PBC Request' }))
+        ].sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
 
-        setStats({
-          totalClients: overview.totalClients || 0,
-          activeEngagements: overview.activeEngagements || 0,
-          pendingInvoices: overview.pendingInvoices || 0,
-          totalRevenue: overview.totalRevenue || 0,
-          recentActivity: activity,
-          upcomingDeadlines: deadlines,
+        setData({
+          overview,
+          activity,
+          kpis,
+          deadlines: combinedDeadlines,
+          engagementStatus: status
         });
+
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error);
-        setStats({
-          totalClients: 0,
-          activeEngagements: 0,
-          pendingInvoices: 0,
-          totalRevenue: 0,
-          recentActivity: [],
-          upcomingDeadlines: [],
-        });
       } finally {
         setLoading(false);
       }
@@ -77,65 +92,59 @@ const Dashboard: React.FC = () => {
     );
   }
 
+  // --- Prepare Data for UI ---
+
+  // 1. Stat Cards
   const statCards = [
     {
       name: 'Total Clients',
-      value: stats?.totalClients || 0,
+      value: data.overview?.clients?.total || 0,
       icon: BuildingOfficeIcon,
       color: 'bg-blue-500',
-      change: '+12%',
-      changeType: 'increase',
     },
     {
       name: 'Active Engagements',
-      value: stats?.activeEngagements || 0,
+      value: data.overview?.engagements?.active || 0,
       icon: BriefcaseIcon,
       color: 'bg-green-500',
-      change: '+8%',
-      changeType: 'increase',
     },
     {
-      name: 'Pending Invoices',
-      value: stats?.pendingInvoices || 0,
-      icon: CurrencyDollarIcon,
+      name: 'Pending Actions',
+      // Sum of pending PBCs and overdue workpapers from overview.workload
+      value: (data.overview?.workload?.pendingPBCs || 0) + (data.overview?.workload?.overdueWorkpapers || 0),
+      icon: DocumentTextIcon,
       color: 'bg-yellow-500',
-      change: '-3%',
-      changeType: 'decrease',
     },
     {
-      name: 'Total Revenue',
-      value: `$${(stats?.totalRevenue || 0).toLocaleString()}`,
-      icon: ChartBarIcon,
+      name: 'Revenue Generated',
+      value: `$${(data.kpis?.kpis?.revenueGenerated || 0).toLocaleString()}`,
+      icon: CurrencyDollarIcon,
       color: 'bg-purple-500',
-      change: '+15%',
-      changeType: 'increase',
     },
   ];
 
+  // 2. Charts Data
+  // Note: The API doesn't provide monthly revenue trends yet, using mock for visual
+  // If you have a specific endpoint for trends, we can swap this.
   const revenueData = [
-    { month: 'Jan', revenue: 45000 },
-    { month: 'Feb', revenue: 52000 },
-    { month: 'Mar', revenue: 48000 },
-    { month: 'Apr', revenue: 61000 },
-    { month: 'May', revenue: 55000 },
-    { month: 'Jun', revenue: 67000 },
+    { month: 'Jan', revenue: 12000 },
+    { month: 'Feb', revenue: 19000 },
+    { month: 'Mar', revenue: 3000 },
+    { month: 'Apr', revenue: 5000 },
+    { month: 'May', revenue: 2000 },
+    { month: 'Jun', revenue: 3000 },
   ];
 
-  const engagementData = [
-    { name: 'Audit', value: 35, color: '#3B82F6' },
-    { name: 'Tax', value: 25, color: '#10B981' },
-    { name: 'Consulting', value: 20, color: '#F59E0B' },
-    { name: 'Advisory', value: 20, color: '#EF4444' },
-  ];
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'high': return 'text-red-600 bg-red-100';
-      case 'medium': return 'text-yellow-600 bg-yellow-100';
-      case 'low': return 'text-green-600 bg-green-100';
-      default: return 'text-gray-600 bg-gray-100';
-    }
-  };
+  // Engagement Status for Pie Chart
+  // If API returns empty object {}, we show a default empty state
+  const statusData = Object.keys(data.engagementStatus).length > 0 
+    ? Object.entries(data.engagementStatus).map(([name, value]) => ({ name, value }))
+    : [
+        { name: 'Active', value: data.overview?.engagements?.active || 0 },
+        { name: 'Completed', value: data.overview?.engagements?.completed || 0 }
+      ].filter(d => d.value > 0);
+  
+  const PIE_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444'];
 
   return (
     <div className="space-y-6">
@@ -144,6 +153,7 @@ const Dashboard: React.FC = () => {
         <p className="text-gray-600">Welcome back! Here's what's happening with your business.</p>
       </div>
 
+      {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {statCards.map((stat) => (
           <div key={stat.name} className="card">
@@ -156,19 +166,14 @@ const Dashboard: React.FC = () => {
                 <p className="text-2xl font-semibold text-gray-900">{stat.value}</p>
               </div>
             </div>
-            <div className="mt-4 flex items-center text-sm">
-              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${stat.changeType === 'increase' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                {stat.change}
-              </span>
-              <span className="ml-2 text-gray-500">from last month</span>
-            </div>
           </div>
         ))}
       </div>
 
+      {/* Charts Area */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Revenue Trend</h3>
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Revenue Trend (YTD)</h3>
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={revenueData}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -181,44 +186,55 @@ const Dashboard: React.FC = () => {
         </div>
 
         <div className="card">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Engagement Distribution</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={engagementData}
-                cx="50%"
-                cy="50%"
-                outerRadius={80}
-                fill="#8884d8"
-                dataKey="value"
-                label={({ name, percent }) => `${name} ${((percent as number) * 100).toFixed(0)}%`}
-               >
-                {engagementData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Engagement Status</h3>
+          {statusData.length > 0 && statusData.some(d => d.value > 0) ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={statusData}
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                  label={({ name, percent }) => `${name} ${((percent as number) * 100).toFixed(0)}%`}
+                >
+                  {statusData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+             <div className="h-[300px] flex items-center justify-center text-gray-400">
+               No engagement data available
+             </div>
+          )}
         </div>
       </div>
 
+      {/* Bottom Section: Activity & Deadlines */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Recent Activity */}
         <div className="card">
           <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Activity</h3>
           <div className="space-y-4">
-            {stats?.recentActivity?.length === 0 ? (
+            {data.activity.length === 0 ? (
               <p className="text-gray-500 text-center py-4">No recent activity</p>
             ) : (
-              stats?.recentActivity?.slice(0, 5).map((activity, index) => (
+              data.activity.slice(0, 5).map((activity, index) => (
                 <div key={activity.id || index} className="flex items-start space-x-3">
-                  <div className="flex-shrink-0">
+                  <div className="flex-shrink-0 mt-1">
                     <CheckCircleIcon className="h-5 w-5 text-green-500" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-900">{activity.description}</p>
+                    <p className="text-sm text-gray-900 font-medium">{activity.action.replace('_', ' ')}</p>
                     <p className="text-xs text-gray-500">
-                      by {activity.user || 'System'} • {activity.timestamp ? new Date(activity.timestamp).toLocaleDateString() : 'Just now'}
+                       {activity.description} • {activity.user}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {new Date(activity.timestamp).toLocaleString()}
                     </p>
                   </div>
                 </div>
@@ -227,28 +243,26 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
+        {/* Upcoming Deadlines */}
         <div className="card">
           <h3 className="text-lg font-medium text-gray-900 mb-4">Upcoming Deadlines</h3>
           <div className="space-y-4">
-            {stats?.upcomingDeadlines?.length === 0 ? (
+            {data.deadlines.length === 0 ? (
               <p className="text-gray-500 text-center py-4">No upcoming deadlines</p>
             ) : (
-              stats?.upcomingDeadlines?.slice(0, 5).map((deadline, index) => (
-                <div key={deadline.id || index} className="flex items-center justify-between">
+              data.deadlines.slice(0, 5).map((deadline, index) => (
+                <div key={deadline.id || index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <div className="flex items-center space-x-3">
                     <ClockIcon className="h-5 w-5 text-gray-400" />
                     <div>
-                      <p className="text-sm font-medium text-gray-900">{deadline.title}</p>
+                      <p className="text-sm font-medium text-gray-900">{deadline.title || deadline.name || 'Untitled'}</p>
                       <p className="text-xs text-gray-500">{deadline.type}</p>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPriorityColor(deadline.priority || 'low')}`}>
-                       {deadline.priority || 'low'}
-                    </span>
-                    <span className="text-xs text-gray-500">
-                      {deadline.dueDate ? new Date(deadline.dueDate).toLocaleDateString() : 'No date'}
-                    </span>
+                  <div className="text-right">
+                    <p className="text-sm font-medium text-primary-600">
+                      {new Date(deadline.dueDate).toLocaleDateString()}
+                    </p>
                   </div>
                 </div>
               ))

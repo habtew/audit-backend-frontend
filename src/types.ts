@@ -1,6 +1,5 @@
 // src/types.ts
 
-// Generic API Response wrapper matches your backend structure
 export interface ApiResponse<T> {
   data: T;
   message: string;
@@ -8,28 +7,21 @@ export interface ApiResponse<T> {
   path: string;
 }
 
-// Login specific data structure
 export interface LoginSuccessData {
   access_token: string;
   user: User;
 }
 
-export interface AuthResponse {
-  token: string;
-  refreshToken?: string;
-  user: User;
-}
-
 export interface User {
   id: string;
-  name?: string;       
-  firstName?: string;  
-  lastName?: string;   
+  firstName?: string;
+  lastName?: string;
+  name?: string; 
   email: string;
   role?: string;
   status?: 'active' | 'inactive';
   createdAt?: string;
-  password?: string; // Optional for forms
+  password?: string;
 }
 
 export interface LoginCredentials {
@@ -44,15 +36,62 @@ export interface RegisterData {
   role?: string;
 }
 
+// --- Dashboard Types ---
+export interface DashboardOverview {
+  engagements: { total: number; active: number; completed: number; };
+  clients: { total: number; };
+  workload: { pendingPBCs: number; overdueWorkpapers: number; };
+  billing: { totalUnbilledHours: number; unbilledAmount: number; };
+}
+
+export interface DashboardActivity {
+  id: string;
+  action: string;
+  entityType: string;
+  user: string;
+  timestamp: string;
+  description: string;
+}
+
+export interface DashboardDeadlines {
+  engagements: any[];
+  pbcRequests: any[];
+}
+
+export interface DashboardKPIs {
+  period: { start: string; end: string; };
+  kpis: {
+    newEngagements: number;
+    completedEngagements: number;
+    avgEngagementDuration: number;
+    clientSatisfaction: number;
+    revenueGenerated: number;
+    utilizationRate: number;
+  };
+}
+
+export interface DashboardWorkload {
+  user: { firstName: string; lastName: string; role: string; };
+  activeEngagements: number;
+  hoursThisWeek: number;
+}
+
+// --- Entity Types ---
+
 export interface Client {
   id: string;
-  name: string;
-  company?: string;
+  name: string; // Company Name
+  contactPerson?: string;
+  company?: string; // Optional fallback
   email?: string;
   phone?: string;
+  address?: string;
+  taxId?: string;
   industry?: string;
-  status?: 'active' | 'inactive'; // Matches your usage
+  isActive?: boolean; // Important for toggle
+  status?: string;
   createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Engagement {
@@ -80,28 +119,4 @@ export interface RiskAssessment {
   mitigation?: string;
   description: string;
   createdAt?: string;
-}
-
-export interface Activity {
-  id: string;
-  description: string;
-  user?: string;
-  timestamp?: string;
-}
-
-export interface Deadline {
-  id: string;
-  title: string;
-  type?: string;
-  priority?: 'low' | 'medium' | 'high';
-  dueDate?: string;
-}
-
-export interface DashboardStats {
-  totalClients: number;
-  activeEngagements: number;
-  pendingInvoices: number;
-  totalRevenue: number;
-  recentActivity: Activity[];
-  upcomingDeadlines: Deadline[];
 }
