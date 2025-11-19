@@ -3,7 +3,7 @@ import { PlusIcon, MagnifyingGlassIcon, PencilIcon, TrashIcon, EyeIcon, Calendar
 import { Dialog, Transition } from '@headlessui/react';
 import { Fragment } from 'react';
 import { useForm } from 'react-hook-form';
-import  apiClient  from '../utils/api';
+import apiClient from '../utils/api';
 import { Engagement, Client } from '../types';
 import LoadingSpinner from '../components/Common/LoadingSpinner';
 import EmptyState from '../components/Common/EmptyState';
@@ -37,8 +37,39 @@ const Engagements: React.FC = () => {
         apiClient.getEngagements(),
         apiClient.getClients(),
       ]);
-      setEngagements(engagementsResponse|| []);
-      setClients(clientsResponse || []);
+
+      // --- ROBUST DATA EXTRACTION START ---
+      
+      // 1. Extract Engagements safely
+      let engagementData: Engagement[] = [];
+      const eRes: any = engagementsResponse;
+      if (Array.isArray(eRes)) {
+        engagementData = eRes;
+      } else if (eRes?.data && Array.isArray(eRes.data)) {
+        engagementData = eRes.data;
+      } else if (eRes?.engagements && Array.isArray(eRes.engagements)) {
+        engagementData = eRes.engagements;
+      } else if (eRes?.data?.engagements && Array.isArray(eRes.data.engagements)) {
+        engagementData = eRes.data.engagements;
+      }
+
+      // 2. Extract Clients safely
+      let clientData: Client[] = [];
+      const cRes: any = clientsResponse;
+      if (Array.isArray(cRes)) {
+        clientData = cRes;
+      } else if (cRes?.data && Array.isArray(cRes.data)) {
+        clientData = cRes.data;
+      } else if (cRes?.clients && Array.isArray(cRes.clients)) {
+        clientData = cRes.clients;
+      } else if (cRes?.data?.clients && Array.isArray(cRes.data.clients)) {
+        clientData = cRes.data.clients;
+      }
+
+      setEngagements(engagementData);
+      setClients(clientData);
+      // --- ROBUST DATA EXTRACTION END ---
+
     } catch (error) {
       console.error('Failed to fetch data:', error);
       setEngagements([]);
@@ -104,7 +135,10 @@ const Engagements: React.FC = () => {
     reset();
   };
 
-  const filteredEngagements = engagements.filter(engagement => {
+  // Ensure we are filtering an array
+  const safeEngagements = Array.isArray(engagements) ? engagements : [];
+
+  const filteredEngagements = safeEngagements.filter(engagement => {
     const matchesSearch = engagement.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          engagement.description?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = !statusFilter || engagement.status === statusFilter;
@@ -115,38 +149,29 @@ const Engagements: React.FC = () => {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed':
-        return 'badge-success';
-      case 'in-progress':
-        return 'badge-primary';
-      case 'planning':
-        return 'badge-warning';
-      case 'review':
-        return 'badge-warning';
-      case 'cancelled':
-        return 'badge-error';
-      default:
-        return 'badge-gray';
+      case 'completed': return 'badge-success';
+      case 'in-progress': return 'badge-primary';
+      case 'planning': return 'badge-warning';
+      case 'review': return 'badge-warning';
+      case 'cancelled': return 'badge-error';
+      default: return 'badge-gray';
     }
   };
 
   const getTypeColor = (type: string) => {
     switch (type) {
-      case 'audit':
-        return 'bg-blue-100 text-blue-800';
-      case 'tax':
-        return 'bg-green-100 text-green-800';
-      case 'consulting':
-        return 'bg-purple-100 text-purple-800';
-      case 'advisory':
-        return 'bg-orange-100 text-orange-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+      case 'audit': return 'bg-blue-100 text-blue-800';
+      case 'tax': return 'bg-green-100 text-green-800';
+      case 'consulting': return 'bg-purple-100 text-purple-800';
+      case 'advisory': return 'bg-orange-100 text-orange-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
   const getClientName = (clientId: string) => {
-    const client = clients.find(c => c.id === clientId);
+    // Safe check for clients array as well
+    const safeClientsList = Array.isArray(clients) ? clients : [];
+    const client = safeClientsList.find(c => c.id === clientId);
     return client?.company || client?.name || 'Unknown Client';
   };
 
@@ -358,7 +383,7 @@ const Engagements: React.FC = () => {
                         <label className="label">Client</label>
                         <select {...register('clientId', { required: 'Client is required' })} className="input">
                           <option value="">Select client</option>
-                          {clients.map((client) => (
+                          {Array.isArray(clients) && clients.map((client) => (
                             <option key={client.id} value={client.id}>
                               {client.company || client.name}
                             </option>

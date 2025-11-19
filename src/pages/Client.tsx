@@ -3,7 +3,7 @@ import { PlusIcon, MagnifyingGlassIcon, PencilIcon, TrashIcon, EyeIcon } from '@
 import { Dialog, Transition } from '@headlessui/react';
 import { Fragment } from 'react';
 import { useForm } from 'react-hook-form';
-import  apiClient  from '../utils/api';
+import apiClient from '../utils/api';
 import { Client } from '../types';
 import LoadingSpinner from '../components/Common/LoadingSpinner';
 import EmptyState from '../components/Common/EmptyState';
@@ -28,17 +28,33 @@ const Clients: React.FC = () => {
   }, []);
 
   const fetchClients = async () => {
-  try {
-    setLoading(true);
-    const clients = await apiClient.getClients();
-    setClients(clients || []);
-  } catch (error) {
-    console.error('Failed to fetch clients:', error);
-    setClients([]);
-  } finally {
-    setLoading(false);
-  }
-};
+    try {
+      setLoading(true);
+      const response: any = await apiClient.getClients();
+      
+      // ROBUST DATA EXTRACTION
+      // This handles multiple possible API formats to prevent crashes
+      let clientData: Client[] = [];
+      
+      if (Array.isArray(response)) {
+        // Case 1: API returns [ ... ]
+        clientData = response;
+      } else if (response?.data && Array.isArray(response.data)) {
+        // Case 2: API returns { data: [ ... ] }
+        clientData = response.data;
+      } else if (response?.clients && Array.isArray(response.clients)) {
+        // Case 3: API returns { clients: [ ... ] }
+        clientData = response.clients;
+      }
+
+      setClients(clientData);
+    } catch (error) {
+      console.error('Failed to fetch clients:', error);
+      setClients([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleCreateClient = async (data: Partial<Client>) => {
     try {
@@ -96,7 +112,10 @@ const Clients: React.FC = () => {
     reset();
   };
 
-  const filteredClients = clients.filter(client =>
+  // Safely ensure clients is an array before filtering
+  const safeClients = Array.isArray(clients) ? clients : [];
+
+  const filteredClients = safeClients.filter(client =>
     client.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     client.company?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     client.industry?.toLowerCase().includes(searchTerm.toLowerCase()) ||

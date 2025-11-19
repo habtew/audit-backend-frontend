@@ -15,23 +15,111 @@ import {
   CurrencyDollarIcon,
   ExclamationTriangleIcon,
   ClockIcon,
+  ArrowRightOnRectangleIcon,
 } from '@heroicons/react/24/outline';
+import { useAuth } from '../../hooks/useAuth';
 
-const navigation = [
-  { name: 'Dashboard', href: '/', icon: HomeIcon },
-  { name: 'Users', href: '/users', icon: UsersIcon },
-  { name: 'Clients', href: '/clients', icon: BuildingOfficeIcon },
-  { name: 'Engagements', href: '/engagements', icon: BriefcaseIcon },
-  { name: 'Entities', href: '/entities', icon: DocumentTextIcon },
-  { name: 'Workpapers', href: '/workpapers', icon: DocumentDuplicateIcon },
-  { name: 'Risk Assessment', href: '/risk-assessments', icon: ShieldCheckIcon },
-  { name: 'Trial Balance', href: '/trial-balances', icon: CalculatorIcon },
-  { name: 'Invoices', href: '/invoices', icon: CurrencyDollarIcon },
-  { name: 'Analytics', href: '/analytics', icon: ChartBarIcon },
-  { name: 'Reports', href: '/reports', icon: ClipboardDocumentListIcon },
-  { name: 'Compliance', href: '/compliance', icon: ExclamationTriangleIcon },
-  { name: 'Billing', href: '/billing', icon: ClockIcon },
-  { name: 'Settings', href: '/settings', icon: CogIcon },
+// Define roles constants to match your Backend PDF/Response
+const ROLES = {
+  ADMIN: 'ADMIN',
+  PARTNER: 'PARTNER',
+  MANAGER: 'MANAGER',
+  SENIOR: 'SENIOR',
+  STAFF: 'STAFF', // Maps to "User" in your register form typically
+};
+
+interface NavItem {
+  name: string;
+  href: string;
+  icon: React.ForwardRefExoticComponent<any>;
+  allowedRoles?: string[]; // Optional: if undefined, allowed for all
+}
+
+const navigation: NavItem[] = [
+  { 
+    name: 'Dashboard', 
+    href: '/', 
+    icon: HomeIcon 
+    // Allowed for ALL
+  },
+  { 
+    name: 'Users', 
+    href: '/users', 
+    icon: UsersIcon, 
+    allowedRoles: [ROLES.ADMIN, ROLES.PARTNER, ROLES.MANAGER] 
+  },
+  { 
+    name: 'Clients', 
+    href: '/clients', 
+    icon: BuildingOfficeIcon 
+    // Allowed for ALL (STAFF has GET /api/clients)
+  },
+  { 
+    name: 'Engagements', 
+    href: '/engagements', 
+    icon: BriefcaseIcon 
+    // Allowed for ALL
+  },
+  { 
+    name: 'Entities', 
+    href: '/entities', 
+    icon: DocumentTextIcon 
+    // Allowed for ALL
+  },
+  { 
+    name: 'Workpapers', 
+    href: '/workpapers', 
+    icon: DocumentDuplicateIcon 
+    // Allowed for ALL
+  },
+  { 
+    name: 'Risk Assessment', 
+    href: '/risk-assessments', 
+    icon: ShieldCheckIcon 
+    // Allowed for ALL
+  },
+  { 
+    name: 'Trial Balance', 
+    href: '/trial-balances', 
+    icon: CalculatorIcon 
+    // Allowed for ALL
+  },
+  { 
+    name: 'Invoices', 
+    href: '/invoices', 
+    icon: CurrencyDollarIcon,
+    allowedRoles: [ROLES.ADMIN, ROLES.PARTNER, ROLES.MANAGER]
+  },
+  { 
+    name: 'Analytics', 
+    href: '/analytics', 
+    icon: ChartBarIcon 
+    // Allowed for ALL (STAFF has specific analytics endpoints)
+  },
+  { 
+    name: 'Reports', 
+    href: '/reports', 
+    icon: ClipboardDocumentListIcon,
+    allowedRoles: [ROLES.ADMIN, ROLES.PARTNER, ROLES.MANAGER]
+  },
+  { 
+    name: 'Compliance', 
+    href: '/compliance', 
+    icon: ExclamationTriangleIcon,
+    allowedRoles: [ROLES.ADMIN, ROLES.PARTNER, ROLES.MANAGER]
+  },
+  { 
+    name: 'Billing', 
+    href: '/billing', 
+    icon: ClockIcon 
+    // Allowed for ALL (STAFF needs time entries)
+  },
+  { 
+    name: 'Settings', 
+    href: '/settings', 
+    icon: CogIcon 
+    // Allowed for ALL
+  },
 ];
 
 interface SidebarProps {
@@ -41,6 +129,15 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const location = useLocation();
+  const { user, logout } = useAuth();
+
+  // Normalize role to uppercase to match constants (e.g. "Staff" -> "STAFF")
+  const userRole = user?.role?.toUpperCase() || ROLES.STAFF;
+
+  const filteredNavigation = navigation.filter((item) => {
+    if (!item.allowedRoles) return true; // If no specific roles defined, allow everyone
+    return item.allowedRoles.includes(userRole);
+  });
 
   return (
     <>
@@ -66,7 +163,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
 
           {/* Navigation */}
           <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
-            {navigation.map((item) => {
+            {filteredNavigation.map((item) => {
               const isActive = location.pathname === item.href;
               return (
                 <NavLink
@@ -90,11 +187,20 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             })}
           </nav>
 
-          {/* Footer */}
+          {/* Footer / Logout */}
           <div className="p-4 border-t border-gray-200">
-            <div className="text-xs text-gray-500 text-center">
-              © 2025 BusinessPro
-            </div>
+             <div className="mb-4 px-3">
+                <p className="text-xs font-semibold text-gray-400 uppercase">Logged in as</p>
+                <p className="text-sm font-medium text-gray-700 truncate">{user?.name || user?.email}</p>
+                <p className="text-xs text-primary-600 font-medium">{userRole}</p>
+             </div>
+            <button
+              onClick={logout}
+              className="flex items-center w-full px-3 py-2 text-sm font-medium text-gray-600 rounded-lg hover:bg-red-50 hover:text-red-700 transition-colors duration-200"
+            >
+              <ArrowRightOnRectangleIcon className="mr-3 h-5 w-5 text-gray-400 group-hover:text-red-500" />
+              Logout
+            </button>
           </div>
         </div>
       </div>

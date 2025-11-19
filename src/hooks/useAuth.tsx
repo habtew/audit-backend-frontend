@@ -1,6 +1,7 @@
+// src/hooks/useAuth.tsx
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react'; 
-import { User, AuthResponse, LoginCredentials, RegisterData } from '../types';
+import { User, LoginCredentials, RegisterData } from '../types';
 import { apiClient } from '../utils/api';
 import toast from 'react-hot-toast';
 
@@ -10,7 +11,6 @@ interface AuthContextType {
   login: (credentials: LoginCredentials) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => void;
-  refreshToken: () => Promise<void>;
   isAuthenticated: boolean;
 }
 
@@ -37,11 +37,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       const token = localStorage.getItem('token');
       if (token) {
         try {
-          const userData: User = await apiClient.getUserProfile();
-          setUser(userData);
+          // Assuming profile response is also wrapped in { data: ... }
+          const response = await apiClient.getUserProfile();
+          // If API returns { data: User }, use response.data
+          setUser(response.data); 
         } catch (error) {
           localStorage.removeItem('token');
-          localStorage.removeItem('refreshToken');
+          setUser(null);
         }
       }
       setLoading(false);
@@ -53,14 +55,21 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const login = async (credentials: LoginCredentials) => {
     try {
       setLoading(true);
-      const response: AuthResponse = await apiClient.login(credentials);
+      const response = await apiClient.login(credentials);
 
-      localStorage.setItem('token', response.token);
-      localStorage.setItem('refreshToken', response.refreshToken || "");
-      setUser(response.user);
+      // FIX: Access token from nested data object based on your screenshot
+      const token = response.data.access_token;
+      const userData = response.data.user;
 
-      toast.success('Login successful!');
+      if (token) {
+        localStorage.setItem('token', token);
+        setUser(userData);
+        toast.success('Login successful!');
+      } else {
+        throw new Error('No access token received');
+      }
     } catch (error: any) {
+      console.error("Login error:", error);
       toast.error(error?.response?.data?.message || 'Login failed');
       throw error;
     } finally {
@@ -71,13 +80,17 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const register = async (data: RegisterData) => {
     try {
       setLoading(true);
-      const response: AuthResponse = await apiClient.register(data);
+      const response = await apiClient.register(data);
+      
+      // Assuming register response matches login response structure
+      const token = response.data.access_token;
+      const userData = response.data.user;
 
-      localStorage.setItem('token', response.token);
-      localStorage.setItem('refreshToken', response.refreshToken || "");
-      setUser(response.user);
-
-      toast.success('Registration successful!');
+      if (token) {
+        localStorage.setItem('token', token);
+        setUser(userData);
+        toast.success('Registration successful!');
+      }
     } catch (error: any) {
       toast.error(error?.response?.data?.message || 'Registration failed');
       throw error;
@@ -88,22 +101,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const logout = () => {
     localStorage.removeItem('token');
-    localStorage.removeItem('refreshToken');
     setUser(null);
     toast.success('Logged out successfully');
-  };
-
-  const refreshToken = async () => {
-    try {
-      const refreshToken = localStorage.getItem('refreshToken');
-      if (!refreshToken) throw new Error('No refresh token');
-
-      const response: { token: string } = await apiClient.refreshToken(refreshToken);
-      localStorage.setItem('token', response.token);
-    } catch (error) {
-      logout();
-      throw error;
-    }
+    window.location.href = '/login';
   };
 
   const value: AuthContextType = {
@@ -112,7 +112,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     login,
     register,
     logout,
-    refreshToken,
     isAuthenticated: !!user,
   };
 
@@ -122,4 +121,3 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     </AuthContext.Provider>
   );
 };
-

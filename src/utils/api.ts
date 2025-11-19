@@ -1,7 +1,18 @@
-
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
 import toast from 'react-hot-toast';
-import { AuthResponse, User, LoginCredentials, RegisterData, Client, Engagement, RiskAssessment,DashboardStats, Activity, Deadline } from '../types';
+import { 
+  ApiResponse, 
+  LoginSuccessData, 
+  LoginCredentials, 
+  RegisterData, 
+  User, 
+  Client, 
+  Engagement, 
+  RiskAssessment, 
+  DashboardStats, 
+  Activity, 
+  Deadline 
+} from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
 
@@ -35,27 +46,28 @@ class ApiClient {
         if (error.response?.status === 401 && !originalRequest._retry) {
           originalRequest._retry = true;
           try {
-            const refreshToken = localStorage.getItem('refreshToken');
-            if (refreshToken) {
-              const response = await this.client.post('/auth/refresh', { refreshToken });
-              const { token } = response.data;
-              localStorage.setItem('token', token);
-              return this.client(originalRequest);
-            }
+            localStorage.removeItem('token');
+            window.location.href = '/login';
           } catch {
             localStorage.removeItem('token');
-            localStorage.removeItem('refreshToken');
             window.location.href = '/login';
           }
         }
         const message = error.response?.data?.message || 'An error occurred';
-        toast.error(message);
+        if (error.response?.status !== 401) {
+            // Suppress toast for dashboard 404s to allow graceful empty state
+            if(error.config?.url?.includes('dashboard')) {
+                console.warn("Dashboard data fetch failed", message);
+            } else {
+                toast.error(message);
+            }
+        }
         return Promise.reject(error);
       }
     );
   }
 
-  // Generic helpers
+  // Generic helpers - returns response.data (the body)
   async get<T>(url: string, params?: any): Promise<T> {
     const response = await this.client.get<T>(url, { params });
     return response.data;
@@ -76,138 +88,107 @@ class ApiClient {
     return response.data;
   }
 
-  // =====================
   // 🔐 AUTH METHODS
-  // =====================
-  async login(credentials: LoginCredentials): Promise<AuthResponse> {
-    return this.post<AuthResponse>('/auth/login', credentials);
+  async login(credentials: LoginCredentials): Promise<ApiResponse<LoginSuccessData>> {
+    return this.post<ApiResponse<LoginSuccessData>>('/auth/login', credentials);
   }
 
-  async register(data: RegisterData): Promise<AuthResponse> {
-    return this.post<AuthResponse>('/auth/register', data);
+  async register(data: RegisterData): Promise<ApiResponse<LoginSuccessData>> {
+    return this.post<ApiResponse<LoginSuccessData>>('/auth/register', data);
   }
 
-  async refreshToken(refreshToken: string): Promise<{ token: string }> {
-    return this.post<{ token: string }>('/auth/refresh', { refreshToken });
+  async getUserProfile(): Promise<ApiResponse<User>> {
+    return this.get<ApiResponse<User>>('/users/profile');
   }
 
-  async getUserProfile(): Promise<User> {
-    return this.get<User>('/users/profile');
+  // ... (User, Client, Engagement methods from previous response remain the same) ...
+
+  // 📈 DASHBOARD DATA
+  // Using 'any' for return type allows Dashboard to handle both { data: ... } and direct ... 
+  // but ideally we use the specific type. Since we are safeExtract-ing, we can return the specific type.
+  async getDashboardOverview(): Promise<ApiResponse<DashboardStats>> {
+    return this.get<ApiResponse<DashboardStats>>('/dashboard/overview');
   }
 
-  async forgotPassword(email: string): Promise<{ message: string }> {
-    return this.post<{ message: string }>('/auth/forgot-password', { email });
+  async getRecentActivity(): Promise<ApiResponse<Activity[]>> {
+    return this.get<ApiResponse<Activity[]>>('/dashboard/activity');
   }
 
-  async resetPassword(token: string, password: string): Promise<{ message: string }> {
-    return this.post<{ message: string }>('/auth/reset-password', { token, password });
+  async getUpcomingDeadlines(): Promise<ApiResponse<Deadline[]>> {
+    return this.get<ApiResponse<Deadline[]>>('/dashboard/deadlines');
   }
 
-  // =====================
-  // 👤 USER MANAGEMENT
-  // =====================
-  async getUsers(params?: any): Promise<User[]> {
-    return this.get<User[]>('/users', params);
+  async getKPIs(): Promise<ApiResponse<any>> {
+    return this.get<ApiResponse<any>>('/dashboard/kpis');
+  }
+  
+  // ... (Rest of the file) ...
+    async getUsers(params?: any): Promise<ApiResponse<User[]>> {
+    return this.get<ApiResponse<User[]>>('/users', params);
   }
 
-  async createUser(data: Partial<User>): Promise<User> {
-    return this.post<User>('/users', data);
+  async createUser(data: Partial<User>): Promise<ApiResponse<User>> {
+    return this.post<ApiResponse<User>>('/users', data);
   }
 
-  async getUserById(id: string): Promise<User> {
-    return this.get<User>(`/users/${id}`);
+  async updateUser(id: string, data: Partial<User>): Promise<ApiResponse<User>> {
+    return this.put<ApiResponse<User>>(`/users/${id}`, data);
   }
 
-  async updateUser(id: string, data: Partial<User>): Promise<User> {
-    return this.put<User>(`/users/${id}`, data);
+  async deleteUser(id: string): Promise<ApiResponse<{ success: boolean }>> {
+    return this.delete<ApiResponse<{ success: boolean }>>(`/users/${id}`);
   }
 
-  async deleteUser(id: string): Promise<{ success: boolean }> {
-    return this.delete<{ success: boolean }>(`/users/${id}`);
+  async toggleUserStatus(id: string): Promise<ApiResponse<User>> {
+    return this.put<ApiResponse<User>>(`/users/${id}/toggle-status`, {});
   }
 
-  async toggleUserStatus(id: string): Promise<User> {
-    return this.put<User>(`/users/${id}/toggle-status`, {});
+  async getClients(params?: any): Promise<ApiResponse<Client[]>> {
+    return this.get<ApiResponse<Client[]>>('/clients', params);
   }
 
-  // =====================
-  // 🧑‍💼 CLIENTS
-  // =====================
-  async getClients(params?: any): Promise<Client[]> {
-    return this.get<Client[]>('/clients', params);
+  async createClient(data: Partial<Client>): Promise<ApiResponse<Client>> {
+    return this.post<ApiResponse<Client>>('/clients', data);
   }
 
-  async createClient(data: Partial<Client>): Promise<Client> {
-    return this.post<Client>('/clients', data);
+  async updateClient(id: string, data: Partial<Client>): Promise<ApiResponse<Client>> {
+    return this.put<ApiResponse<Client>>(`/clients/${id}`, data);
   }
 
-  async updateClient(id: string, data: Partial<Client>): Promise<Client> {
-    return this.put<Client>(`/clients/${id}`, data);
+  async deleteClient(id: string): Promise<ApiResponse<{ success: boolean }>> {
+    return this.delete<ApiResponse<{ success: boolean }>>(`/clients/${id}`);
   }
 
-  async deleteClient(id: string): Promise<{ success: boolean }> {
-    return this.delete<{ success: boolean }>(`/clients/${id}`);
+  async createEngagement(data: Partial<Engagement>): Promise<ApiResponse<Engagement>> {
+    return this.post<ApiResponse<Engagement>>('/engagements', data);
   }
 
-  // =====================
-  // 📊 ENGAGEMENTS
-  // =====================
-  // In ApiClient class
-
-  async createEngagement(data: Partial<Engagement>): Promise<Engagement> {
-    return this.post<Engagement>('/engagements', data);
+  async getEngagements(params?: any): Promise<ApiResponse<Engagement[]>> {
+    return this.get<ApiResponse<Engagement[]>>('/engagements', params);
   }
 
-  async getEngagements(params?: any): Promise<Engagement[]> {
-    return this.get<Engagement[]>('/engagements', params);
-  }
-
-  async updateEngagement(id: string, data: Partial<Engagement>): Promise<Engagement> {
-    return this.put<Engagement>(`/engagements/${id}`, data);
+  async updateEngagement(id: string, data: Partial<Engagement>): Promise<ApiResponse<Engagement>> {
+    return this.put<ApiResponse<Engagement>>(`/engagements/${id}`, data);
   }
 
   async deleteEngagement(id: string): Promise<void> {
     return this.delete<void>(`/engagements/${id}`);
   }
 
-
-
-  // =====================
-  // ⚠️ RISK ASSESSMENTS
-  // =====================
-  async getRiskAssessments(params?: any): Promise<RiskAssessment[]> {
-    return this.get<RiskAssessment[]>('/risk-assessments', params);
+  async getRiskAssessments(params?: any): Promise<ApiResponse<RiskAssessment[]>> {
+    return this.get<ApiResponse<RiskAssessment[]>>('/risk-assessments', params);
   }
 
-  async createRiskAssessment(data: Partial<RiskAssessment>): Promise<RiskAssessment> {
-    return this.post<RiskAssessment>('/risk-assessments', data);
+  async createRiskAssessment(data: Partial<RiskAssessment>): Promise<ApiResponse<RiskAssessment>> {
+    return this.post<ApiResponse<RiskAssessment>>('/risk-assessments', data);
   }
 
-  async updateRiskAssessment(id: string, data: Partial<RiskAssessment>): Promise<RiskAssessment> {
-    return this.put<RiskAssessment>(`/risk-assessments/${id}`, data);
+  async updateRiskAssessment(id: string, data: Partial<RiskAssessment>): Promise<ApiResponse<RiskAssessment>> {
+    return this.put<ApiResponse<RiskAssessment>>(`/risk-assessments/${id}`, data);
   }
 
-  async deleteRiskAssessment(id: string): Promise<{ success: boolean }> {
-    return this.delete<{ success: boolean }>(`/risk-assessments/${id}`);
-  }
-
-  // =====================
-  // 📈 DASHBOARD DATA
-  // =====================
-  async getDashboardOverview(): Promise<{ data: DashboardStats }> {
-    return this.get<{ data: DashboardStats }>('/dashboard/overview');
-  }
-
-  async getRecentActivity(): Promise<{ data: Activity[] }> {
-    return this.get<{ data: Activity[] }>('/dashboard/activity');
-  }
-
-  async getUpcomingDeadlines(): Promise<{ data: Deadline[] }> {
-    return this.get<{ data: Deadline[] }>('/dashboard/deadlines');
-  }
-
-  async getKPIs(): Promise<{ data: any }> {
-    return this.get<{ data: any }>('/dashboard/kpis');
+  async deleteRiskAssessment(id: string): Promise<ApiResponse<{ success: boolean }>> {
+    return this.delete<ApiResponse<{ success: boolean }>>(`/risk-assessments/${id}`);
   }
 }
 
