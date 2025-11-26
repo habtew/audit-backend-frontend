@@ -10,6 +10,8 @@ import Users from './pages/Users';
 import Clients from './pages/Client';
 import Engagements from './pages/Engagements';
 import RiskAssessments from './pages/RiskAssessments';
+import Workpapers from './pages/Workpapers';
+import Entities from './pages/Entities';
 import LoadingSpinner from './components/Common/LoadingSpinner';
 import ErrorBoundary from './components/Common/ErrorBoundary';
 
@@ -90,8 +92,8 @@ function App() {
                 <Route path="clients" element={<Clients />} />
                 <Route path="engagements" element={<Engagements />} />
                 <Route path="risk-assessments" element={<RiskAssessments />} />
-                <Route path="entities" element={<PlaceholderPage title="Entities" />} />
-                <Route path="workpapers" element={<PlaceholderPage title="Workpapers" />} />
+                <Route path="entities" element={<Entities />} />
+                <Route path="workpapers" element={<Workpapers />} />
                 <Route path="trial-balances" element={<PlaceholderPage title="Trial Balances" />} />
                 <Route path="invoices" element={<PlaceholderPage title="Invoices" />} />
                 <Route path="analytics" element={<PlaceholderPage title="Analytics" />} />

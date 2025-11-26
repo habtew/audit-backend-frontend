@@ -1,21 +1,58 @@
-import React, { useEffect, useState } from 'react';
-import { PlusIcon, MagnifyingGlassIcon, PencilIcon, TrashIcon, EyeIcon, CalendarIcon, CurrencyDollarIcon } from '@heroicons/react/24/outline';
+import React, { useEffect, useState, Fragment } from 'react';
+import { 
+  PlusIcon, 
+  MagnifyingGlassIcon, 
+  PencilIcon, 
+  TrashIcon, 
+  CalendarIcon, 
+  ClockIcon, 
+  BuildingOfficeIcon 
+} from '@heroicons/react/24/outline';
 import { Dialog, Transition } from '@headlessui/react';
-import { Fragment } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
+import toast from 'react-hot-toast';
 import apiClient from '../utils/api';
-import { Engagement, Client } from '../types';
 import LoadingSpinner from '../components/Common/LoadingSpinner';
 import EmptyState from '../components/Common/EmptyState';
-import toast from 'react-hot-toast';
+// We import types but will extend/override them locally to match the new API fields
+import { Client } from '../types';
+
+// Updated Interfaces matching the new API Docs
+interface Entity {
+  id: string;
+  name: string;
+  clientId: string;
+  type: string;
+}
+
+interface Engagement {
+  id: string;
+  name: string;
+  type: 'AUDIT' | 'REVIEW' | 'COMPILATION' | 'TAX' | 'ADVISORY';
+  status: 'PLANNING' | 'FIELDWORK' | 'REVIEW' | 'COMPLETED' | 'ARCHIVED';
+  description?: string;
+  startDate?: string;
+  endDate?: string;
+  clientId: string;
+  entityId: string;
+  budgetHours: number;
+  createdAt?: string;
+}
 
 const Engagements: React.FC = () => {
+  // State
   const [engagements, setEngagements] = useState<Engagement[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
+  const [entities, setEntities] = useState<Entity[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  const [clientFilter, setClientFilter] = useState('');
+
+  // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEngagement, setEditingEngagement] = useState<Engagement | null>(null);
 
@@ -23,8 +60,13 @@ const Engagements: React.FC = () => {
     register,
     handleSubmit,
     reset,
+    control,
+    setValue,
     formState: { errors },
   } = useForm<Partial<Engagement>>();
+
+  // Watch clientId to filter entities in the form
+  const selectedClientId = useWatch({ control, name: 'clientId' });
 
   useEffect(() => {
     fetchData();
@@ -33,47 +75,36 @@ const Engagements: React.FC = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [engagementsResponse, clientsResponse] = await Promise.all([
+      // Fetch Engagements, Clients, and Entities in parallel
+      // We pass limit: 1000 to get full lists for dropdowns
+      const [engagementsRes, clientsRes, entitiesRes] = await Promise.all([
         apiClient.getEngagements(),
-        apiClient.getClients(),
+        apiClient.getClients({ limit: 1000 }),
+        apiClient.getEntities({ limit: 1000 })
       ]);
 
-      // --- ROBUST DATA EXTRACTION START ---
-      
-      // 1. Extract Engagements safely
-      let engagementData: Engagement[] = [];
-      const eRes: any = engagementsResponse;
-      if (Array.isArray(eRes)) {
-        engagementData = eRes;
-      } else if (eRes?.data && Array.isArray(eRes.data)) {
-        engagementData = eRes.data;
-      } else if (eRes?.engagements && Array.isArray(eRes.engagements)) {
-        engagementData = eRes.engagements;
-      } else if (eRes?.data?.engagements && Array.isArray(eRes.data.engagements)) {
-        engagementData = eRes.data.engagements;
-      }
+      // Robust extraction helper
+      const extractArray = (res: any, key?: string) => {
+        if (!res) return [];
+        if (Array.isArray(res)) return res;
+        
+        // Check res.data (standard)
+        if (Array.isArray(res.data)) return res.data;
+        
+        // Check nested keys (e.g. res.data.clients)
+        if (key && res.data && Array.isArray(res.data[key])) return res.data[key];
+        if (key && res[key] && Array.isArray(res[key])) return res[key];
+        
+        return [];
+      };
 
-      // 2. Extract Clients safely
-      let clientData: Client[] = [];
-      const cRes: any = clientsResponse;
-      if (Array.isArray(cRes)) {
-        clientData = cRes;
-      } else if (cRes?.data && Array.isArray(cRes.data)) {
-        clientData = cRes.data;
-      } else if (cRes?.clients && Array.isArray(cRes.clients)) {
-        clientData = cRes.clients;
-      } else if (cRes?.data?.clients && Array.isArray(cRes.data.clients)) {
-        clientData = cRes.data.clients;
-      }
-
-      setEngagements(engagementData);
-      setClients(clientData);
-      // --- ROBUST DATA EXTRACTION END ---
+      setEngagements(extractArray(engagementsRes, 'engagements'));
+      setClients(extractArray(clientsRes, 'clients'));
+      setEntities(extractArray(entitiesRes, 'entities'));
 
     } catch (error) {
       console.error('Failed to fetch data:', error);
-      setEngagements([]);
-      setClients([]);
+      toast.error('Failed to load engagement data');
     } finally {
       setLoading(false);
     }
@@ -81,38 +112,55 @@ const Engagements: React.FC = () => {
 
   const handleCreateEngagement = async (data: Partial<Engagement>) => {
     try {
-      await apiClient.createEngagement(data);
+      // FIX: Remove 'status' from creation payload as API sets it automatically
+      const { status, ...cleanData } = data;
+
+      const payload = {
+        ...cleanData,
+        budgetHours: Number(cleanData.budgetHours),
+        // Send undefined for entityId if it's an empty string (e.g. "Select Entity" option)
+        entityId: cleanData.entityId || undefined,
+        startDate: cleanData.startDate ? new Date(cleanData.startDate).toISOString() : undefined,
+        endDate: cleanData.endDate ? new Date(cleanData.endDate).toISOString() : undefined
+      };
+
+      await apiClient.createEngagement(payload);
       toast.success('Engagement created successfully');
       fetchData();
-      setIsModalOpen(false);
-      reset();
-    } catch (error) {
-      toast.error('Failed to create engagement');
+      closeModal();
+    } catch (error: any) {
+      const msg = error?.response?.data?.message || error.message || 'Failed to create engagement';
+      toast.error(Array.isArray(msg) ? msg.join(', ') : msg);
     }
   };
 
   const handleUpdateEngagement = async (data: Partial<Engagement>) => {
     if (!editingEngagement) return;
-    
     try {
-      await apiClient.updateEngagement(editingEngagement.id, data);
+      const payload = {
+        ...data,
+        budgetHours: Number(data.budgetHours),
+        entityId: data.entityId || undefined,
+        startDate: data.startDate ? new Date(data.startDate).toISOString() : undefined,
+        endDate: data.endDate ? new Date(data.endDate).toISOString() : undefined
+      };
+
+      await apiClient.updateEngagement(editingEngagement.id, payload);
       toast.success('Engagement updated successfully');
       fetchData();
-      setIsModalOpen(false);
-      setEditingEngagement(null);
-      reset();
-    } catch (error) {
-      toast.error('Failed to update engagement');
+      closeModal();
+    } catch (error: any) {
+      const msg = error?.response?.data?.message || error.message || 'Failed to update engagement';
+      toast.error(Array.isArray(msg) ? msg.join(', ') : msg);
     }
   };
 
   const handleDeleteEngagement = async (engagementId: string) => {
     if (!confirm('Are you sure you want to delete this engagement?')) return;
-    
     try {
       await apiClient.deleteEngagement(engagementId);
       toast.success('Engagement deleted successfully');
-      fetchData();
+      setEngagements(prev => prev.filter(e => e.id !== engagementId));
     } catch (error) {
       toast.error('Failed to delete engagement');
     }
@@ -121,10 +169,22 @@ const Engagements: React.FC = () => {
   const openModal = (engagement?: Engagement) => {
     if (engagement) {
       setEditingEngagement(engagement);
-      reset(engagement);
+      // Format dates for input fields (YYYY-MM-DD)
+      const formattedData = {
+        ...engagement,
+        startDate: engagement.startDate ? new Date(engagement.startDate).toISOString().split('T')[0] : '',
+        endDate: engagement.endDate ? new Date(engagement.endDate).toISOString().split('T')[0] : '',
+      };
+      reset(formattedData);
     } else {
       setEditingEngagement(null);
-      reset();
+      reset({
+        status: 'PLANNING', 
+        type: 'AUDIT',
+        budgetHours: 0,
+        clientId: '',
+        entityId: ''
+      });
     }
     setIsModalOpen(true);
   };
@@ -135,52 +195,61 @@ const Engagements: React.FC = () => {
     reset();
   };
 
-  // Ensure we are filtering an array
+  // --- Filtering Logic ---
   const safeEngagements = Array.isArray(engagements) ? engagements : [];
-
+  
   const filteredEngagements = safeEngagements.filter(engagement => {
-    const matchesSearch = engagement.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         engagement.description?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = 
+      (engagement.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+      (engagement.description?.toLowerCase() || '').includes(searchTerm.toLowerCase());
     const matchesStatus = !statusFilter || engagement.status === statusFilter;
     const matchesType = !typeFilter || engagement.type === typeFilter;
+    const matchesClient = !clientFilter || engagement.clientId === clientFilter;
     
-    return matchesSearch && matchesStatus && matchesType;
+    return matchesSearch && matchesStatus && matchesType && matchesClient;
   });
+
+  // --- Helpers ---
+  const getClientName = (clientId: string) => {
+    const safeClients = Array.isArray(clients) ? clients : [];
+    const client = safeClients.find(c => c.id === clientId);
+    return client?.company || client?.name || 'Unknown Client';
+  };
+
+  const getEntityName = (entityId: string) => {
+    const safeEntities = Array.isArray(entities) ? entities : [];
+    const entity = safeEntities.find(e => e.id === entityId);
+    return entity?.name || 'N/A';
+  };
+
+  // Filter entities for the dropdown based on selected Client
+  const availableEntities = selectedClientId 
+    ? (Array.isArray(entities) ? entities : []).filter(e => e.clientId === selectedClientId)
+    : [];
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed': return 'badge-success';
-      case 'in-progress': return 'badge-primary';
-      case 'planning': return 'badge-warning';
-      case 'review': return 'badge-warning';
-      case 'cancelled': return 'badge-error';
-      default: return 'badge-gray';
+      case 'COMPLETED': return 'bg-green-100 text-green-800';
+      case 'FIELDWORK': return 'bg-blue-100 text-blue-800';
+      case 'PLANNING': return 'bg-yellow-100 text-yellow-800';
+      case 'REVIEW': return 'bg-purple-100 text-purple-800';
+      case 'ARCHIVED': return 'bg-gray-100 text-gray-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
   const getTypeColor = (type: string) => {
     switch (type) {
-      case 'audit': return 'bg-blue-100 text-blue-800';
-      case 'tax': return 'bg-green-100 text-green-800';
-      case 'consulting': return 'bg-purple-100 text-purple-800';
-      case 'advisory': return 'bg-orange-100 text-orange-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'AUDIT': return 'text-indigo-600 bg-indigo-50 ring-indigo-500/10';
+      case 'TAX': return 'text-emerald-600 bg-emerald-50 ring-emerald-500/10';
+      case 'ADVISORY': return 'text-orange-600 bg-orange-50 ring-orange-500/10';
+      default: return 'text-gray-600 bg-gray-50 ring-gray-500/10';
     }
   };
 
-  const getClientName = (clientId: string) => {
-    // Safe check for clients array as well
-    const safeClientsList = Array.isArray(clients) ? clients : [];
-    const client = safeClientsList.find(c => c.id === clientId);
-    return client?.company || client?.name || 'Unknown Client';
-  };
-
-  const engagementTypes = ['audit', 'tax', 'consulting', 'advisory'];
-  const engagementStatuses = ['planning', 'in-progress', 'review', 'completed', 'cancelled'];
-
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
+      <div className="min-h-[400px] flex items-center justify-center">
         <LoadingSpinner size="lg" />
       </div>
     );
@@ -189,147 +258,156 @@ const Engagements: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="sm:flex sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Engagements</h1>
-          <p className="text-gray-600">Manage your client engagements and projects</p>
+          <p className="mt-2 text-sm text-gray-700">
+            Manage your audit, tax, and advisory engagements.
+          </p>
         </div>
-        <button
-          onClick={() => openModal()}
-          className="btn-primary"
-        >
-          <PlusIcon className="h-5 w-5 mr-2" />
-          New Engagement
-        </button>
+        <div className="mt-4 sm:mt-0">
+          <button
+            onClick={() => openModal()}
+            className="btn-primary flex items-center"
+          >
+            <PlusIcon className="h-5 w-5 mr-2" />
+            New Engagement
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1">
-          <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="relative">
+          <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
           <input
             type="text"
             placeholder="Search engagements..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="input pl-10"
+            className="input pl-10 w-full"
           />
         </div>
+        
         <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="input w-full sm:w-auto"
+          value={clientFilter}
+          onChange={(e) => setClientFilter(e.target.value)}
+          className="input w-full"
         >
-          <option value="">All Statuses</option>
-          {engagementStatuses.map(status => (
-            <option key={status} value={status} className="capitalize">
-              {status.replace('-', ' ')}
+          <option value="">All Clients</option>
+          {Array.isArray(clients) && clients.map(client => (
+            <option key={client.id} value={client.id}>
+              {client.company || client.name}
             </option>
           ))}
         </select>
+
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="input w-full"
+        >
+          <option value="">All Statuses</option>
+          {['PLANNING', 'FIELDWORK', 'REVIEW', 'COMPLETED', 'ARCHIVED'].map(status => (
+            <option key={status} value={status}>{status}</option>
+          ))}
+        </select>
+
         <select
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value)}
-          className="input w-full sm:w-auto"
+          className="input w-full"
         >
           <option value="">All Types</option>
-          {engagementTypes.map(type => (
-            <option key={type} value={type} className="capitalize">
-              {type}
-            </option>
+          {['AUDIT', 'REVIEW', 'COMPILATION', 'TAX', 'ADVISORY'].map(type => (
+            <option key={type} value={type}>{type}</option>
           ))}
         </select>
       </div>
 
-      {/* Engagements Grid */}
+      {/* Content */}
       {filteredEngagements.length === 0 ? (
         <EmptyState
           title="No engagements found"
-          description="Get started by creating your first engagement."
+          description="Try adjusting your filters or create a new engagement."
           actionLabel="New Engagement"
           onAction={() => openModal()}
         />
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
           {filteredEngagements.map((engagement) => (
-            <div key={engagement.id} className="card hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
-                  <h3 className="text-lg font-medium text-gray-900 mb-1">{engagement.title}</h3>
-                  <p className="text-sm text-gray-600 mb-2">{getClientName(engagement.clientId)}</p>
-                  <p className="text-sm text-gray-500 line-clamp-2">{engagement.description}</p>
+            <div key={engagement.id} className="card hover:shadow-lg transition-all duration-200 border border-gray-100">
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="text-lg font-semibold text-gray-900 truncate max-w-[200px]" title={engagement.name}>
+                      {engagement.name}
+                    </h3>
+                    <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${getTypeColor(engagement.type)}`}>
+                      {engagement.type}
+                    </span>
+                  </div>
+                  <div className="flex items-center text-sm text-gray-500">
+                    <BuildingOfficeIcon className="h-4 w-4 mr-1" />
+                    <span className="truncate max-w-[180px]">
+                      {getClientName(engagement.clientId)}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex flex-col items-end space-y-2">
-                  <span className={`badge ${getStatusColor(engagement.status)} capitalize`}>
-                    {engagement.status.replace('-', ' ')}
-                  </span>
-                  <span className={`badge ${getTypeColor(engagement.type || 'default')} capitalize`}>
-                    {engagement.type || 'N/A'}
-                  </span>
-                 </div>
+                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getStatusColor(engagement.status)}`}>
+                  {engagement.status}
+                </span>
               </div>
 
-              <div className="space-y-3">
-                <div className="flex items-center text-sm text-gray-600">
-                  <CalendarIcon className="h-4 w-4 mr-2" />
-                  <span>
-                 {new Date(engagement.startDate ?? '').toLocaleDateString()} –{' '}
-                  {engagement.endDate ? new Date(engagement.endDate).toLocaleDateString() : 'Present'}
-                  </span>
+              <div className="space-y-3 mb-6">
+                <p className="text-sm text-gray-600 line-clamp-2 min-h-[40px]">
+                  {engagement.description || 'No description provided.'}
+                </p>
+                
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="flex items-center text-gray-500">
+                    <CalendarIcon className="h-4 w-4 mr-2" />
+                    <span>
+                      {engagement.endDate ? new Date(engagement.endDate).toLocaleDateString() : 'No Deadline'}
+                    </span>
+                  </div>
+                  <div className="flex items-center text-gray-500">
+                    <ClockIcon className="h-4 w-4 mr-2" />
+                    <span>{engagement.budgetHours} Hrs</span>
+                  </div>
                 </div>
                 
-                <div className="flex items-center text-sm text-gray-600">
-                  <CurrencyDollarIcon className="h-4 w-4 mr-2" />
-                  <span>
-                    Budget: ${engagement.budget?.toLocaleString() || 0}
-                  </span>
-                </div>
-
-                {engagement.actualCost && (
-                  <div className="flex items-center text-sm text-gray-600">
-                    <span className="ml-6">
-                      Actual: ${engagement.actualCost.toLocaleString()}
-                    </span>
+                {engagement.entityId && (
+                  <div className="text-xs text-gray-400 pt-2 border-t border-gray-50">
+                    Entity: {getEntityName(engagement.entityId)}
                   </div>
                 )}
               </div>
 
-              <div className="mt-6 flex justify-between items-center">
-                <span className="text-xs text-gray-500">
-                  Created {new Date(engagement.createdAt || Date.now()).toLocaleDateString()}
-                </span>
-                <div className="flex space-x-2">
-                  <button
-                    onClick={() => {/* View engagement details */}}
-                    className="text-gray-600 hover:text-gray-900"
-                    title="View details"
-                  >
-                    <EyeIcon className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => openModal(engagement)}
-                    className="text-primary-600 hover:text-primary-900"
-                    title="Edit engagement"
-                  >
-                    <PencilIcon className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteEngagement(engagement.id)}
-                    className="text-red-600 hover:text-red-900"
-                    title="Delete engagement"
-                  >
-                    <TrashIcon className="h-4 w-4" />
-                  </button>
-                </div>
+              <div className="flex justify-end items-center gap-2 pt-2 border-t border-gray-100">
+                <button
+                  onClick={() => openModal(engagement)}
+                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+                  title="Edit"
+                >
+                  <PencilIcon className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => handleDeleteEngagement(engagement.id)}
+                  className="p-2 text-red-600 hover:bg-red-50 rounded-full transition-colors"
+                  title="Delete"
+                >
+                  <TrashIcon className="h-4 w-4" />
+                </button>
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Modal */}
+      {/* Create/Edit Modal */}
       <Transition appear show={isModalOpen} as={Fragment}>
-        <Dialog as="div" className="relative z-10" onClose={closeModal}>
+        <Dialog as="div" className="relative z-50" onClose={closeModal}>
           <Transition.Child
             as={Fragment}
             enter="ease-out duration-300"
@@ -339,11 +417,11 @@ const Engagements: React.FC = () => {
             leaveFrom="opacity-100"
             leaveTo="opacity-0"
           >
-            <div className="fixed inset-0 bg-black bg-opacity-25" />
+            <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" />
           </Transition.Child>
 
           <div className="fixed inset-0 overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4 text-center">
+            <div className="flex min-h-full items-center justify-center p-4">
               <Transition.Child
                 as={Fragment}
                 enter="ease-out duration-300"
@@ -353,93 +431,88 @@ const Engagements: React.FC = () => {
                 leaveFrom="opacity-100 scale-100"
                 leaveTo="opacity-0 scale-95"
               >
-                <Dialog.Panel className="w-full max-w-2xl transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
-                  <Dialog.Title
-                    as="h3"
-                    className="text-lg font-medium leading-6 text-gray-900 mb-4"
-                  >
+                <Dialog.Panel className="w-full max-w-2xl transform overflow-hidden rounded-2xl bg-white p-6 shadow-xl transition-all">
+                  <Dialog.Title as="h3" className="text-xl font-semibold leading-6 text-gray-900 mb-6">
                     {editingEngagement ? 'Edit Engagement' : 'New Engagement'}
                   </Dialog.Title>
 
-                  <form
-                    onSubmit={handleSubmit(editingEngagement ? handleUpdateEngagement : handleCreateEngagement)}
-                    className="space-y-4"
-                  >
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="md:col-span-2">
-                        <label className="label">Title</label>
+                  <form onSubmit={handleSubmit(editingEngagement ? handleUpdateEngagement : handleCreateEngagement)} className="space-y-6">
+                    <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
+                      {/* Name */}
+                      <div className="sm:col-span-2">
+                        <label className="label">Engagement Name</label>
                         <input
-                          {...register('title', { required: 'Title is required' })}
+                          {...register('name', { required: 'Name is required' })}
                           type="text"
                           className="input"
-                          placeholder="Enter engagement title"
+                          placeholder="e.g., 2024 Annual Audit"
                         />
-                        {errors.title && (
-                          <p className="mt-1 text-sm text-red-600">{errors.title.message}</p>
-                        )}
+                        {errors.name && <p className="text-error">{errors.name.message}</p>}
                       </div>
 
+                      {/* Client */}
                       <div>
                         <label className="label">Client</label>
-                        <select {...register('clientId', { required: 'Client is required' })} className="input">
-                          <option value="">Select client</option>
-                          {Array.isArray(clients) && clients.map((client) => (
-                            <option key={client.id} value={client.id}>
-                              {client.company || client.name}
-                            </option>
+                        <select 
+                          {...register('clientId', { required: 'Client is required' })} 
+                          className="input"
+                          onChange={(e) => {
+                            setValue('clientId', e.target.value);
+                            setValue('entityId', ''); // Reset entity when client changes
+                          }}
+                        >
+                          <option value="">Select Client</option>
+                          {clients.map(c => (
+                            <option key={c.id} value={c.id}>{c.company || c.name}</option>
                           ))}
                         </select>
-                        {errors.clientId && (
-                          <p className="mt-1 text-sm text-red-600">{errors.clientId.message}</p>
-                        )}
+                        {errors.clientId && <p className="text-error">{errors.clientId.message}</p>}
                       </div>
 
+                      {/* Entity - Dependent on Client */}
+                      <div>
+                        <label className="label">Entity</label>
+                        <select 
+                          {...register('entityId', { required: 'Entity is required' })} 
+                          className="input"
+                          disabled={!selectedClientId}
+                        >
+                          <option value="">Select Entity</option>
+                          {availableEntities.map(e => (
+                            <option key={e.id} value={e.id}>{e.name}</option>
+                          ))}
+                        </select>
+                        {!selectedClientId && <p className="text-xs text-gray-500 mt-1">Select a client first</p>}
+                        {errors.entityId && <p className="text-error">{errors.entityId.message}</p>}
+                      </div>
+
+                      {/* Type */}
                       <div>
                         <label className="label">Type</label>
                         <select {...register('type', { required: 'Type is required' })} className="input">
-                          <option value="">Select type</option>
-                          {engagementTypes.map((type) => (
-                            <option key={type} value={type} className="capitalize">
-                              {type}
-                            </option>
+                          <option value="">Select Type</option>
+                          {['AUDIT', 'REVIEW', 'COMPILATION', 'TAX', 'ADVISORY'].map(t => (
+                            <option key={t} value={t}>{t}</option>
                           ))}
                         </select>
-                        {errors.type && (
-                          <p className="mt-1 text-sm text-red-600">{errors.type.message}</p>
-                        )}
+                        {errors.type && <p className="text-error">{errors.type.message}</p>}
                       </div>
 
-                      <div>
-                        <label className="label">Status</label>
-                        <select {...register('status', { required: 'Status is required' })} className="input">
-                          <option value="">Select status</option>
-                          {engagementStatuses.map((status) => (
-                            <option key={status} value={status} className="capitalize">
-                              {status.replace('-', ' ')}
-                            </option>
-                          ))}
-                        </select>
-                        {errors.status && (
-                          <p className="mt-1 text-sm text-red-600">{errors.status.message}</p>
-                        )}
-                      </div>
+                      {/* Status - Only visible for Editing */}
+                      {editingEngagement && (
+                        <div>
+                          <label className="label">Status</label>
+                          <select {...register('status', { required: 'Status is required' })} className="input">
+                            <option value="">Select Status</option>
+                            {['PLANNING', 'FIELDWORK', 'REVIEW', 'COMPLETED', 'ARCHIVED'].map(s => (
+                              <option key={s} value={s}>{s}</option>
+                            ))}
+                          </select>
+                          {errors.status && <p className="text-error">{errors.status.message}</p>}
+                        </div>
+                      )}
 
-                      <div>
-                        <label className="label">Budget</label>
-                        <input
-                          {...register('budget', { 
-                            required: 'Budget is required',
-                            min: { value: 0, message: 'Budget must be positive' }
-                          })}
-                          type="number"
-                          className="input"
-                          placeholder="Enter budget amount"
-                        />
-                        {errors.budget && (
-                          <p className="mt-1 text-sm text-red-600">{errors.budget.message}</p>
-                        )}
-                      </div>
-
+                      {/* Start Date */}
                       <div>
                         <label className="label">Start Date</label>
                         <input
@@ -447,11 +520,10 @@ const Engagements: React.FC = () => {
                           type="date"
                           className="input"
                         />
-                        {errors.startDate && (
-                          <p className="mt-1 text-sm text-red-600">{errors.startDate.message}</p>
-                        )}
+                        {errors.startDate && <p className="text-error">{errors.startDate.message}</p>}
                       </div>
 
+                      {/* End Date */}
                       <div>
                         <label className="label">End Date</label>
                         <input
@@ -459,23 +531,38 @@ const Engagements: React.FC = () => {
                           type="date"
                           className="input"
                         />
-                        {errors.endDate && (
-                          <p className="mt-1 text-sm text-red-600">{errors.endDate.message}</p>
-                        )}
+                        {errors.endDate && <p className="text-error">{errors.endDate.message}</p>}
                       </div>
 
-                      <div className="md:col-span-2">
+                      {/* Budget Hours */}
+                      <div className="sm:col-span-2">
+                        <label className="label">Budget Hours</label>
+                        <input
+                          {...register('budgetHours', { 
+                            required: 'Budget hours are required',
+                            min: { value: 0, message: 'Must be positive' },
+                            valueAsNumber: true
+                          })}
+                          type="number"
+                          className="input"
+                          placeholder="e.g., 200"
+                        />
+                        {errors.budgetHours && <p className="text-error">{errors.budgetHours.message}</p>}
+                      </div>
+
+                      {/* Description */}
+                      <div className="sm:col-span-2">
                         <label className="label">Description</label>
                         <textarea
                           {...register('description')}
                           rows={3}
                           className="input"
-                          placeholder="Enter engagement description"
+                          placeholder="Scope of the engagement..."
                         />
                       </div>
                     </div>
 
-                    <div className="flex justify-end space-x-3 pt-4">
+                    <div className="mt-6 flex justify-end gap-3">
                       <button
                         type="button"
                         onClick={closeModal}
@@ -483,8 +570,11 @@ const Engagements: React.FC = () => {
                       >
                         Cancel
                       </button>
-                      <button type="submit" className="btn-primary">
-                        {editingEngagement ? 'Update' : 'Create'} Engagement
+                      <button
+                        type="submit"
+                        className="btn-primary"
+                      >
+                        {editingEngagement ? 'Update Engagement' : 'Create Engagement'}
                       </button>
                     </div>
                   </form>
