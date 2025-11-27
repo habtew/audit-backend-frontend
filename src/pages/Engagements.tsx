@@ -6,7 +6,10 @@ import {
   TrashIcon, 
   CalendarIcon, 
   ClockIcon, 
-  BuildingOfficeIcon 
+  BuildingOfficeIcon,
+  XMarkIcon,
+  UserCircleIcon,
+  InformationCircleIcon
 } from '@heroicons/react/24/outline';
 import { Dialog, Transition } from '@headlessui/react';
 import { useForm, useWatch } from 'react-hook-form';
@@ -33,10 +36,18 @@ interface Engagement {
   description?: string;
   startDate?: string;
   endDate?: string;
+  yearEnd?: string;
   clientId: string;
   entityId: string;
   budgetHours: number;
+  actualHours?: number;
   createdAt?: string;
+  updatedAt?: string;
+  // Nested objects from Detail API
+  client?: { id: string; name: string; industry?: string; email?: string; };
+  entity?: { id: string; name: string; taxId?: string; };
+  creator?: { firstName: string; lastName: string; email: string; };
+  users?: any[];
 }
 
 const Engagements: React.FC = () => {
@@ -55,6 +66,11 @@ const Engagements: React.FC = () => {
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEngagement, setEditingEngagement] = useState<Engagement | null>(null);
+
+  // Detail Modal State
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [viewEngagement, setViewEngagement] = useState<Engagement | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   const {
     register,
@@ -121,7 +137,8 @@ const Engagements: React.FC = () => {
         // Send undefined for entityId if it's an empty string (e.g. "Select Entity" option)
         entityId: cleanData.entityId || undefined,
         startDate: cleanData.startDate ? new Date(cleanData.startDate).toISOString() : undefined,
-        endDate: cleanData.endDate ? new Date(cleanData.endDate).toISOString() : undefined
+        endDate: cleanData.endDate ? new Date(cleanData.endDate).toISOString() : undefined,
+        yearEnd: cleanData.yearEnd ? new Date(cleanData.yearEnd).toISOString() : undefined,
       };
 
       await apiClient.createEngagement(payload);
@@ -142,7 +159,8 @@ const Engagements: React.FC = () => {
         budgetHours: Number(data.budgetHours),
         entityId: data.entityId || undefined,
         startDate: data.startDate ? new Date(data.startDate).toISOString() : undefined,
-        endDate: data.endDate ? new Date(data.endDate).toISOString() : undefined
+        endDate: data.endDate ? new Date(data.endDate).toISOString() : undefined,
+        yearEnd: data.yearEnd ? new Date(data.yearEnd).toISOString() : undefined,
       };
 
       await apiClient.updateEngagement(editingEngagement.id, payload);
@@ -155,7 +173,8 @@ const Engagements: React.FC = () => {
     }
   };
 
-  const handleDeleteEngagement = async (engagementId: string) => {
+  const handleDeleteEngagement = async (engagementId: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent opening detail modal
     if (!confirm('Are you sure you want to delete this engagement?')) return;
     try {
       await apiClient.deleteEngagement(engagementId);
@@ -166,14 +185,35 @@ const Engagements: React.FC = () => {
     }
   };
 
-  const openModal = (engagement?: Engagement) => {
+  // --- View Detail Logic ---
+  const handleViewEngagement = async (id: string) => {
+    try {
+      setIsDetailModalOpen(true);
+      setDetailLoading(true);
+      const res: any = await apiClient.getEngagementById(id);
+      // Extract data safely
+      const data = res.data || res;
+      setViewEngagement(data);
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to load engagement details');
+      setIsDetailModalOpen(false);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const openModal = (engagement?: Engagement, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation(); // Prevent detail click
     if (engagement) {
       setEditingEngagement(engagement);
       // Format dates for input fields (YYYY-MM-DD)
+      const formatDate = (d?: string) => d ? new Date(d).toISOString().split('T')[0] : '';
       const formattedData = {
         ...engagement,
-        startDate: engagement.startDate ? new Date(engagement.startDate).toISOString().split('T')[0] : '',
-        endDate: engagement.endDate ? new Date(engagement.endDate).toISOString().split('T')[0] : '',
+        startDate: formatDate(engagement.startDate),
+        endDate: formatDate(engagement.endDate),
+        yearEnd: formatDate(engagement.yearEnd),
       };
       reset(formattedData);
     } else {
@@ -336,11 +376,15 @@ const Engagements: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
           {filteredEngagements.map((engagement) => (
-            <div key={engagement.id} className="card hover:shadow-lg transition-all duration-200 border border-gray-100">
+            <div 
+              key={engagement.id} 
+              onClick={() => handleViewEngagement(engagement.id)}
+              className="card hover:shadow-lg transition-all duration-200 border border-gray-100 cursor-pointer group"
+            >
               <div className="flex justify-between items-start mb-4">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <h3 className="text-lg font-semibold text-gray-900 truncate max-w-[200px]" title={engagement.name}>
+                    <h3 className="text-lg font-semibold text-gray-900 truncate max-w-[200px] group-hover:text-primary-600 transition-colors" title={engagement.name}>
                       {engagement.name}
                     </h3>
                     <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${getTypeColor(engagement.type)}`}>
@@ -386,15 +430,15 @@ const Engagements: React.FC = () => {
 
               <div className="flex justify-end items-center gap-2 pt-2 border-t border-gray-100">
                 <button
-                  onClick={() => openModal(engagement)}
-                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+                  onClick={(e) => openModal(engagement, e)}
+                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-full transition-colors z-10"
                   title="Edit"
                 >
                   <PencilIcon className="h-4 w-4" />
                 </button>
                 <button
-                  onClick={() => handleDeleteEngagement(engagement.id)}
-                  className="p-2 text-red-600 hover:bg-red-50 rounded-full transition-colors"
+                  onClick={(e) => handleDeleteEngagement(engagement.id, e)}
+                  className="p-2 text-red-600 hover:bg-red-50 rounded-full transition-colors z-10"
                   title="Delete"
                 >
                   <TrashIcon className="h-4 w-4" />
@@ -404,6 +448,164 @@ const Engagements: React.FC = () => {
           ))}
         </div>
       )}
+
+      {/* DETAIL VIEW MODAL */}
+      <Transition appear show={isDetailModalOpen} as={Fragment}>
+        <Dialog as="div" className="relative z-50" onClose={() => setIsDetailModalOpen(false)}>
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" />
+          <div className="fixed inset-0 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4">
+              <Dialog.Panel className="w-full max-w-3xl bg-white rounded-2xl shadow-2xl overflow-hidden">
+                {detailLoading ? (
+                  <div className="p-12 flex justify-center">
+                    <LoadingSpinner size="lg" />
+                  </div>
+                ) : viewEngagement ? (
+                  <div className="flex flex-col max-h-[90vh]">
+                    {/* Header */}
+                    <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-start bg-gray-50">
+                      <div>
+                        <div className="flex items-center gap-3 mb-2">
+                          <h2 className="text-2xl font-bold text-gray-900">{viewEngagement.name}</h2>
+                          <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(viewEngagement.status)}`}>
+                            {viewEngagement.status}
+                          </span>
+                          <span className={`px-2 py-0.5 rounded text-xs font-medium ring-1 ring-inset ${getTypeColor(viewEngagement.type)}`}>
+                            {viewEngagement.type}
+                          </span>
+                        </div>
+                        <div className="flex items-center text-sm text-gray-500 gap-4">
+                          <span className="flex items-center gap-1.5">
+                            <BuildingOfficeIcon className="h-4 w-4"/> 
+                            {viewEngagement.client?.name || getClientName(viewEngagement.clientId)}
+                          </span>
+                          {viewEngagement.entity && (
+                            <span className="flex items-center gap-1.5">
+                              <InformationCircleIcon className="h-4 w-4"/>
+                              {viewEngagement.entity.name}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => setIsDetailModalOpen(false)}
+                        className="text-gray-400 hover:text-gray-500 transition-colors p-1 rounded-full hover:bg-gray-200"
+                      >
+                        <XMarkIcon className="h-6 w-6" />
+                      </button>
+                    </div>
+
+                    {/* Body */}
+                    <div className="p-6 overflow-y-auto space-y-8">
+                      {/* Description */}
+                      <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+                        <h4 className="text-xs font-semibold text-blue-800 uppercase tracking-wider mb-2">Scope & Description</h4>
+                        <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">
+                          {viewEngagement.description || 'No detailed description provided.'}
+                        </p>
+                      </div>
+
+                      {/* Key Details Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-4">
+                          <h4 className="text-sm font-semibold text-gray-900 border-b pb-2">Timeline</h4>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-gray-50 p-3 rounded-lg">
+                              <span className="text-xs text-gray-500 block mb-1">Start Date</span>
+                              <div className="flex items-center gap-2 font-medium text-gray-900 text-sm">
+                                <CalendarIcon className="h-4 w-4 text-gray-400"/>
+                                {viewEngagement.startDate ? new Date(viewEngagement.startDate).toLocaleDateString() : 'N/A'}
+                              </div>
+                            </div>
+                            <div className="bg-gray-50 p-3 rounded-lg">
+                              <span className="text-xs text-gray-500 block mb-1">End Date</span>
+                              <div className="flex items-center gap-2 font-medium text-gray-900 text-sm">
+                                <CalendarIcon className="h-4 w-4 text-gray-400"/>
+                                {viewEngagement.endDate ? new Date(viewEngagement.endDate).toLocaleDateString() : 'N/A'}
+                              </div>
+                            </div>
+                            <div className="col-span-2 bg-gray-50 p-3 rounded-lg">
+                              <span className="text-xs text-gray-500 block mb-1">Fiscal Year End</span>
+                              <div className="font-medium text-gray-900 text-sm">
+                                {viewEngagement.yearEnd ? new Date(viewEngagement.yearEnd).toLocaleDateString() : 'N/A'}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="space-y-4">
+                          <h4 className="text-sm font-semibold text-gray-900 border-b pb-2">Resources</h4>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-gray-50 p-3 rounded-lg">
+                              <span className="text-xs text-gray-500 block mb-1">Budget</span>
+                              <div className="flex items-center gap-2 font-medium text-gray-900 text-sm">
+                                <ClockIcon className="h-4 w-4 text-gray-400"/>
+                                {viewEngagement.budgetHours} Hours
+                              </div>
+                            </div>
+                            <div className="bg-gray-50 p-3 rounded-lg">
+                              <span className="text-xs text-gray-500 block mb-1">Actual</span>
+                              <div className="flex items-center gap-2 font-medium text-gray-900 text-sm">
+                                <ClockIcon className="h-4 w-4 text-gray-400"/>
+                                {viewEngagement.actualHours || 0} Hours
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="bg-gray-50 p-3 rounded-lg">
+                            <span className="text-xs text-gray-500 block mb-1">Created By</span>
+                            <div className="flex items-center gap-2 font-medium text-gray-900 text-sm">
+                              <UserCircleIcon className="h-4 w-4 text-gray-400"/>
+                              {viewEngagement.creator ? `${viewEngagement.creator.firstName} ${viewEngagement.creator.lastName}` : 'System'}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Team Section (if needed/available) */}
+                      {viewEngagement.users && viewEngagement.users.length > 0 && (
+                        <div>
+                          <h4 className="text-sm font-semibold text-gray-900 border-b pb-2 mb-3">Assigned Team</h4>
+                          <div className="flex flex-wrap gap-2">
+                            {viewEngagement.users.map((u: any, idx: number) => (
+                              <span key={idx} className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                                {u.user?.firstName} {u.user?.lastName} ({u.role})
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Footer */}
+                    <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
+                      <button 
+                        onClick={() => {
+                          setIsDetailModalOpen(false);
+                          openModal(viewEngagement);
+                        }} 
+                        className="btn-secondary text-sm"
+                      >
+                        Edit Engagement
+                      </button>
+                      <button 
+                        onClick={() => setIsDetailModalOpen(false)} 
+                        className="btn-primary text-sm"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-12 text-center text-gray-500">
+                    Failed to load details.
+                  </div>
+                )}
+              </Dialog.Panel>
+            </div>
+          </div>
+        </Dialog>
+      </Transition>
 
       {/* Create/Edit Modal */}
       <Transition appear show={isModalOpen} as={Fragment}>
@@ -534,8 +736,19 @@ const Engagements: React.FC = () => {
                         {errors.endDate && <p className="text-error">{errors.endDate.message}</p>}
                       </div>
 
+                      {/* Year End (NEW) */}
+                      <div>
+                        <label className="label">Year End</label>
+                        <input
+                          {...register('yearEnd', { required: 'Year End is required' })}
+                          type="date"
+                          className="input"
+                        />
+                        {errors.yearEnd && <p className="text-error">{errors.yearEnd.message}</p>}
+                      </div>
+
                       {/* Budget Hours */}
-                      <div className="sm:col-span-2">
+                      <div>
                         <label className="label">Budget Hours</label>
                         <input
                           {...register('budgetHours', { 

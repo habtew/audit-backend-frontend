@@ -1,4 +1,4 @@
-// src/types.ts
+// src/types/index.ts
 
 export interface ApiResponse<T> {
   data: T;
@@ -16,12 +16,27 @@ export interface User {
   id: string;
   firstName?: string;
   lastName?: string;
-  name?: string; 
+  name?: string; // Optional fallback
   email: string;
   role?: string;
-  status?: 'active' | 'inactive';
+  isActive?: boolean; // Matches backend boolean
+  status?: string;    // Deprecated string status (optional)
   createdAt?: string;
+  updatedAt?: string;
   password?: string;
+}
+
+export interface Document {
+  id: string;
+  name: string;
+  filePath: string;
+  fileSize: number;
+  mimeType: string;
+  createdAt: string;
+  uploader?: {
+    firstName: string;
+    lastName: string;
+  };
 }
 
 export interface LoginCredentials {
@@ -94,7 +109,7 @@ export interface Client {
   updatedAt?: string;
 }
 
-// --- Entity Types (NEW) ---
+// --- Entity Types ---
 
 export interface Entity {
   id: string;
@@ -112,19 +127,32 @@ export interface Entity {
 
 export interface Engagement {
   id: string;
-  title: string; // or 'name' depending on API consistency
-  name?: string; // Handling both potential API fields
-  clientId: string;
-  entityId?: string;
-  status: string; // 'PLANNING' | 'FIELDWORK' | 'REVIEW' | 'COMPLETED' | 'ARCHIVED'
-  type?: string; // 'AUDIT' | 'REVIEW' | 'COMPILATION' | 'TAX' | 'ADVISORY'
+  name: string;
+  type: 'AUDIT' | 'REVIEW' | 'COMPILATION' | 'TAX' | 'ADVISORY';
+  status: 'PLANNING' | 'FIELDWORK' | 'REVIEW' | 'COMPLETED' | 'ARCHIVED';
+  description?: string;
   startDate?: string;
   endDate?: string;
-  budget?: number;
-  budgetHours?: number;
-  actualCost?: number;
-  description?: string;
+  yearEnd?: string;
+  clientId: string;
+  entityId: string;
+  budgetHours: number;
+  actualHours?: number;
   createdAt?: string;
+  updatedAt?: string;
+  client?: { id: string; name: string };
+  entity?: { id: string; name: string };
+  creator?: { firstName: string; lastName: string; email: string };
+}
+
+export interface EngagementResponse {
+  engagements: Engagement[];
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
 }
 
 export interface AssignUserDto {
@@ -133,14 +161,21 @@ export interface AssignUserDto {
 }
 
 export interface EngagementTeamUser {
+  id: string; // Assignment ID
+  engagementId: string;
   userId: string;
-  firstName: string;
-  lastName: string;
   role: string;
-  email: string;
+  assignedAt: string;
+  user: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    role: string;
+  };
 }
 
-// --- Workpaper Types (NEW) ---
+// --- Workpaper Types ---
 
 export interface Workpaper {
   id: string;
@@ -148,89 +183,88 @@ export interface Workpaper {
   reference: string;
   title: string;
   description?: string;
-  status: 'NOT_STARTED' | 'IN_PROGRESS' | 'REVIEWED' | 'COMPLETED';
-  content?: any; // Flexible JSON content (OrderedMap etc.)
+  status: 'NOT_STARTED' | 'IN_PROGRESS' | 'REVIEWED' | 'COMPLETED' | 'DRAFT';
+  content?: any;
   assignedTo?: string;
   reviewedBy?: string;
   reviewedAt?: string;
   createdAt?: string;
   updatedAt?: string;
+  // Relations
+  engagement?: Engagement;
+  documents?: Document[]; // Array of documents
+  _count?: {
+    documents: number;
+  };
 }
 
 export interface WorkpaperTemplate {
   templateId: string;
   name: string;
   category: string;
+  description?: string;
 }
 
 // --- Risk Assessment Types ---
+// ... existing types ...
+
+// --- Risk Assessment Types (Updated) ---
 
 export interface RiskAssessment {
   id: string;
-  title: string;
   engagementId: string;
-  riskLevel: 'low' | 'medium' | 'high' | 'critical';
-  status: 'identified' | 'assessed' | 'mitigated' | 'closed';
-  likelihood?: 'low' | 'medium' | 'high';
-  impact?: 'low' | 'medium' | 'high';
-  mitigation?: string;
-  description: string;
+  category: string;       // e.g. "REVENUE", "ASSETS"
+  riskDescription: string;
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  likelihood: 'LOW' | 'MEDIUM' | 'HIGH';
+  impact: 'LOW' | 'MEDIUM' | 'HIGH';
+  mitigationPlan?: string;
+  assessedBy?: string;
+  assessedAt?: string;
+  isActive?: boolean;
   createdAt?: string;
+  updatedAt?: string;
+  // Relations
+  engagement?: {
+    id?: string;
+    name: string;
+    client?: { name: string };
+  };
 }
-// export interface AuthResponse {
-//   token: string;
-//   refreshToken: string;
-//   user: User;
-// }
 
-// export interface User {
-//   id: string;
-//   name: string;
-//   email: string;
-//   role: 'ADMIN' | 'USER';
-//   status: 'ACTIVE' | 'INACTIVE';
-//   createdAt: string;
-//   password?: string;
-// }
+export interface RiskMatrix {
+  engagementId: string;
+  matrix: {
+    HIGH: { HIGH: RiskAssessment[]; MEDIUM: RiskAssessment[]; LOW: RiskAssessment[] };
+    MEDIUM: { HIGH: RiskAssessment[]; MEDIUM: RiskAssessment[]; LOW: RiskAssessment[] };
+    LOW: { HIGH: RiskAssessment[]; MEDIUM: RiskAssessment[]; LOW: RiskAssessment[] };
+  };
+  summary: {
+    total: number;
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+  };
+}
 
-// export interface LoginCredentials {
-//   email: string;
-//   password: string;
-// }
-
-// export interface RegisterData {
-//   name: string;
-//   email: string;
-//   password: string;
-//   role: 'ADMIN' | 'USER';
-// }
-
-// export interface Client {
-//   id: string;
-//   name: string;
-//   email: string;
-//   phone: string;
-//   company: string;
-//   status: 'ACTIVE' | 'INACTIVE';
-//   createdAt: string;
-// }
-
-// export interface Engagement {
-//   id: string;
-//   title: string;
-//   clientId: string;
-//   createdAt: string;
-// }
-
-// export interface RiskAssessment {
-//   id: string;
-//   title: string;
-//   description: string;
-//   engagementId: string;
-//   riskLevel: 'low' | 'medium' | 'high' | 'critical';
-//   likelihood: 'low' | 'medium' | 'high';
-//   impact: 'low' | 'medium' | 'high';
-//   status: 'identified' | 'assessed' | 'mitigated' | 'closed';
-//   mitigation?: string;
-//   createdAt: string;
-// }
+export interface RiskReport {
+  engagement: {
+    name: string;
+    client: string;
+    entity: string;
+  };
+  summary: {
+    totalRisks: number;
+    highRisks: number;
+    categoriesAssessed: number;
+  };
+  risksByCategory: Record<string, RiskAssessment[]>;
+  highPriorityRisks: RiskAssessment[];
+  recommendations: {
+    priority: string;
+    message: string;
+  }[];
+  generatedAt: string;
+  generatedBy: string;
+}

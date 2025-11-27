@@ -1,128 +1,179 @@
-import { useState, useEffect } from 'react';
-import { PlusIcon, MagnifyingGlassIcon, PencilIcon, TrashIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
-import { Dialog, Transition } from '@headlessui/react';
-import { Fragment } from 'react';
+import React, { useEffect, useState, Fragment } from 'react';
+import { 
+  PlusIcon, 
+  MagnifyingGlassIcon, 
+  PencilIcon, 
+  TrashIcon, 
+  ExclamationTriangleIcon,
+  ChartBarIcon,
+  ListBulletIcon,
+  DocumentTextIcon,
+  FunnelIcon
+} from '@heroicons/react/24/outline';
+import { Dialog, Transition, Tab } from '@headlessui/react';
 import { useForm } from 'react-hook-form';
+import toast from 'react-hot-toast';
 import apiClient from '../utils/api';
-import { RiskAssessment, Engagement } from '../types';
 import LoadingSpinner from '../components/Common/LoadingSpinner';
 import EmptyState from '../components/Common/EmptyState';
-import toast from 'react-hot-toast';
-
-interface RiskFormInputs {
-  title: string;
-  engagementId: string;
-  description: string;
-  riskLevel: 'low' | 'medium' | 'high' | 'critical';
-  likelihood: 'low' | 'medium' | 'high';
-  impact: 'low' | 'medium' | 'high';
-  status: 'identified' | 'assessed' | 'mitigated' | 'closed';
-  mitigation?: string;
-}
+import { Engagement, RiskAssessment, RiskMatrix, RiskReport } from '../types';
 
 const RiskAssessments: React.FC = () => {
-  const [riskAssessments, setRiskAssessments] = useState<RiskAssessment[]>([]);
+  // --- State ---
+  const [risks, setRisks] = useState<RiskAssessment[]>([]);
   const [engagements, setEngagements] = useState<Engagement[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [riskLevelFilter, setRiskLevelFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [selectedEngagementId, setSelectedEngagementId] = useState<string>('');
+  
+  // Matrix & Report Data
+  const [matrixData, setMatrixData] = useState<RiskMatrix | null>(null);
+  const [reportData, setReportData] = useState<RiskReport | null>(null);
+
+  // Modals
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRisk, setEditingRisk] = useState<RiskAssessment | null>(null);
 
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors },
-  } = useForm<RiskFormInputs>({
-    defaultValues: {
-      title: '',
-      engagementId: '',
-      description: '',
-      riskLevel: 'low',
-      likelihood: 'low',
-      impact: 'low',
-      status: 'identified',
-      mitigation: '',
-    },
-  });
+  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm<Partial<RiskAssessment>>();
 
+  // --- Effects ---
   useEffect(() => {
-    fetchData();
+    fetchInitialData();
   }, []);
 
-  const fetchData = async () => {
+  useEffect(() => {
+    if (selectedEngagementId) {
+      // If user switches engagement filter, we can optionally reload specific data
+      // For now, list fetches all, but Matrix/Report need ID
+      fetchMatrixAndReport(selectedEngagementId);
+    }
+  }, [selectedEngagementId]);
+
+  // --- Data Fetching ---
+  const fetchInitialData = async () => {
     try {
       setLoading(true);
-      const [risksResponse, engagementsResponse] = await Promise.all([
-        apiClient.getRiskAssessments(),
-        apiClient.getEngagements(),
+      const [risksRes, engRes] = await Promise.all([
+        apiClient.getRiskAssessments({ limit: 100 }), // Get initial list
+        apiClient.getEngagements({ limit: 1000 })
       ]);
-      setRiskAssessments(risksResponse);
-      setEngagements(engagementsResponse);
+
+      // Extract Risks
+      const rawRisks = risksRes as any;
+      let riskList: RiskAssessment[] = [];
+      if (rawRisks?.data?.riskAssessments) riskList = rawRisks.data.riskAssessments;
+      else if (Array.isArray(rawRisks?.data)) riskList = rawRisks.data;
+      
+      setRisks(riskList);
+
+      // Extract Engagements
+      const rawEng = engRes as any;
+      let engList: Engagement[] = [];
+      if (rawEng?.data?.engagements) engList = rawEng.data.engagements;
+      else if (Array.isArray(rawEng?.data)) engList = rawEng.data;
+      else if (Array.isArray(rawEng)) engList = rawEng;
+      
+      setEngagements(engList);
+
+      // Set default engagement selection if available
+      if (engList.length > 0 && !selectedEngagementId) {
+        setSelectedEngagementId(engList[0].id);
+      }
+
     } catch (error) {
-      console.error('Failed to fetch data:', error);
-      setRiskAssessments([]);
-      setEngagements([]);
+      console.error(error);
+      toast.error('Failed to load risk data');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCreateRisk = async (data: RiskFormInputs) => {
+  const fetchMatrixAndReport = async (engagementId: string) => {
     try {
-      await apiClient.createRiskAssessment(data);
-      toast.success('Risk assessment created successfully');
-      fetchData();
-      setIsModalOpen(false);
-      reset();
+      const [matrixRes, reportRes] = await Promise.all([
+        apiClient.getRiskMatrix(engagementId),
+        apiClient.getRiskReport(engagementId)
+      ]);
+      
+      setMatrixData((matrixRes as any).data || matrixRes);
+      setReportData((reportRes as any).data || reportRes);
     } catch (error) {
-      toast.error('Failed to create risk assessment');
+      console.error("Failed to load detailed views", error);
+      // Don't toast here to avoid spamming if just switching tabs on empty data
     }
   };
 
-  const handleUpdateRisk = async (data: RiskFormInputs) => {
-    if (!editingRisk?.id) return;
+  const fetchRisks = async () => {
     try {
-      await apiClient.updateRiskAssessment(editingRisk.id, data);
-      toast.success('Risk assessment updated successfully');
-      fetchData();
-      setIsModalOpen(false);
-      setEditingRisk(null);
-      reset();
+      const params: any = { limit: 100 };
+      if (selectedEngagementId) params.engagementId = selectedEngagementId;
+      
+      const res: any = await apiClient.getRiskAssessments(params);
+      setRisks(res?.data?.riskAssessments || res?.data || []);
     } catch (error) {
-      toast.error('Failed to update risk assessment');
+      toast.error("Failed to refresh list");
     }
   };
 
-  const handleDeleteRisk = async (riskId: string) => {
-    if (!confirm('Are you sure you want to delete this risk assessment?')) return;
+  // --- Handlers ---
+  const handleSaveRisk = async (data: Partial<RiskAssessment>) => {
     try {
-      await apiClient.deleteRiskAssessment(riskId);
-      toast.success('Risk assessment deleted successfully');
-      fetchData();
-    } catch (error) {
-      toast.error('Failed to delete risk assessment');
+      const payload = {
+        ...data,
+        engagementId: data.engagementId || selectedEngagementId, // Use dropdown selection if not in form
+      };
+
+      if (editingRisk) {
+        await apiClient.updateRiskAssessment(editingRisk.id, payload);
+        toast.success('Risk updated');
+      } else {
+        await apiClient.createRiskAssessment(payload);
+        toast.success('Risk created');
+      }
+      
+      closeModal();
+      fetchRisks(); // Refresh list
+      if (selectedEngagementId) fetchMatrixAndReport(selectedEngagementId); // Refresh visualizations
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'Operation failed');
     }
   };
 
+  const handleDelete = async (id: string) => {
+    if (!confirm('Delete this risk?')) return;
+    try {
+      await apiClient.deleteRiskAssessment(id);
+      toast.success('Risk deleted');
+      setRisks(prev => prev.filter(r => r.id !== id));
+      if (selectedEngagementId) fetchMatrixAndReport(selectedEngagementId);
+    } catch (error) {
+      toast.error('Failed to delete');
+    }
+  };
+
+  // --- Helpers ---
+  const getRiskColor = (level: string) => {
+    switch (level?.toUpperCase()) {
+      case 'CRITICAL': return 'bg-red-800 text-white';
+      case 'HIGH': return 'bg-red-100 text-red-800 border-red-200';
+      case 'MEDIUM': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'LOW': return 'bg-green-100 text-green-800 border-green-200';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  // --- Modal ---
   const openModal = (risk?: RiskAssessment) => {
     if (risk) {
       setEditingRisk(risk);
-      reset({
-        title: risk.title,
-        engagementId: risk.engagementId,
-        description: risk.description,
-        riskLevel: risk.riskLevel,
-        likelihood: risk.likelihood,
-        impact: risk.impact,
-        status: risk.status,
-        mitigation: risk.mitigation || '',
-      });
+      reset(risk);
     } else {
       setEditingRisk(null);
-      reset();
+      reset({
+        engagementId: selectedEngagementId,
+        riskLevel: 'MEDIUM',
+        likelihood: 'MEDIUM',
+        impact: 'MEDIUM'
+      });
     }
     setIsModalOpen(true);
   };
@@ -133,364 +184,312 @@ const RiskAssessments: React.FC = () => {
     reset();
   };
 
-  const filteredRisks = riskAssessments.filter(risk => {
-    const matchesSearch = risk.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         risk.description?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRiskLevel = !riskLevelFilter || risk.riskLevel === riskLevelFilter;
-    const matchesStatus = !statusFilter || risk.status === statusFilter;
-    return matchesSearch && matchesRiskLevel && matchesStatus;
-  });
-
-  const getRiskLevelColor = (level: string) => {
-    switch (level) {
-      case 'critical': return 'bg-red-100 text-red-800 border-red-200';
-      case 'high': return 'bg-orange-100 text-orange-800 border-orange-200';
-      case 'medium': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'low': return 'bg-green-100 text-green-800 border-green-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'closed': return 'badge-success';
-      case 'mitigated': return 'badge-primary';
-      case 'assessed': return 'badge-warning';
-      case 'identified': return 'badge-error';
-      default: return 'badge-gray';
-    }
-  };
-
-  const getRiskIcon = (level: string) => {
-    const iconClass = "h-5 w-5";
-    switch (level) {
-      case 'critical':
-      case 'high': return <ExclamationTriangleIcon className={`${iconClass} text-red-500`} />;
-      case 'medium': return <ExclamationTriangleIcon className={`${iconClass} text-yellow-500`} />;
-      case 'low': return <ExclamationTriangleIcon className={`${iconClass} text-green-500`} />;
-      default: return <ExclamationTriangleIcon className={`${iconClass} text-gray-500`} />;
-    }
-  };
-
-  const getEngagementName = (engagementId: string) => {
-    const engagement = engagements.find(e => e.id === engagementId);
-    return engagement?.title || 'Unknown Engagement';
-  };
-
-  const riskLevels = ['low', 'medium', 'high', 'critical'];
-  const riskStatuses = ['identified', 'assessed', 'mitigated', 'closed'];
-  const likelihoodLevels = ['low', 'medium', 'high'];
-  const impactLevels = ['low', 'medium', 'high'];
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <LoadingSpinner size="lg" />
+  // --- Components ---
+  
+  // 1. Heatmap Cell
+  const MatrixCell = ({ risks, label }: { risks: RiskAssessment[], label?: string }) => (
+    <div className={`h-32 border border-gray-200 p-2 rounded-lg relative overflow-y-auto ${risks?.length > 0 ? 'bg-white hover:shadow-md' : 'bg-gray-50/50'}`}>
+      {label && <span className="absolute top-1 right-2 text-xs text-gray-400 font-medium uppercase">{label}</span>}
+      <div className="flex flex-wrap gap-1 mt-4">
+        {risks?.map(r => (
+          <div key={r.id} className={`w-3 h-3 rounded-full ${getRiskColor(r.riskLevel).split(' ')[0]}`} title={r.riskDescription} />
+        ))}
+        {risks?.length > 0 && <span className="text-xs text-gray-500 ml-1">({risks.length})</span>}
       </div>
-    );
-  }
+    </div>
+  );
+
+  if (loading) return <div className="h-64 flex items-center justify-center"><LoadingSpinner size="lg" /></div>;
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      {/* Header & Controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Risk Assessments</h1>
-          <p className="text-gray-600">Identify, assess, and manage risks across your engagements</p>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <ExclamationTriangleIcon className="h-7 w-7 text-orange-500" />
+            Risk Assessment
+          </h1>
+          <p className="text-gray-500 text-sm mt-1">Identify, assess, and mitigate engagement risks.</p>
         </div>
-        <button onClick={() => openModal()} className="btn-primary">
-          <PlusIcon className="h-5 w-5 mr-2" />
-          New Risk Assessment
-        </button>
+        <div className="flex items-center gap-3">
+          <div className="relative min-w-[200px]">
+            <FunnelIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <select 
+              value={selectedEngagementId} 
+              onChange={(e) => setSelectedEngagementId(e.target.value)}
+              className="input pl-9 py-2 text-sm w-full"
+            >
+              <option value="">Select Engagement Context...</option>
+              {engagements.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+            </select>
+          </div>
+          <button onClick={() => openModal()} className="btn-primary flex items-center whitespace-nowrap">
+            <PlusIcon className="h-5 w-5 mr-2" /> Add Risk
+          </button>
+        </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1">
-          <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search risk assessments..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="input pl-10"
-          />
-        </div>
-        <select
-          value={riskLevelFilter}
-          onChange={(e) => setRiskLevelFilter(e.target.value)}
-          className="input w-full sm:w-auto"
-        >
-          <option value="">All Risk Levels</option>
-          {riskLevels.map(level => (
-            <option key={level} value={level} className="capitalize">
-              {level}
-            </option>
+      {/* TABS */}
+      <Tab.Group>
+        <Tab.List className="flex space-x-1 rounded-xl bg-gray-100 p-1 max-w-md">
+          {['Register', 'Matrix', 'Report'].map((category) => (
+            <Tab
+              key={category}
+              className={({ selected }) =>
+                `w-full rounded-lg py-2.5 text-sm font-medium leading-5 transition-all
+                 ${selected ? 'bg-white text-primary-700 shadow' : 'text-gray-500 hover:bg-white/[0.12] hover:text-gray-700'}`
+              }
+            >
+              {category}
+            </Tab>
           ))}
-        </select>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="input w-full sm:w-auto"
-        >
-          <option value="">All Statuses</option>
-          {riskStatuses.map(status => (
-            <option key={status} value={status} className="capitalize">
-              {status}
-            </option>
-          ))}
-        </select>
-      </div>
+        </Tab.List>
 
-      {filteredRisks.length === 0 ? (
-        <EmptyState
-          title="No risk assessments found"
-          description="Get started by creating your first risk assessment."
-          actionLabel="New Risk Assessment"
-          onAction={() => openModal()}
-          icon={ExclamationTriangleIcon}
-        />
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {filteredRisks.map((risk) => (
-            <div key={risk.id} className="card hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-start space-x-3 flex-1">
-                  {getRiskIcon(risk.riskLevel || "")}
+        <Tab.Panels className="mt-4">
+          {/* TAB 1: LIST REGISTER */}
+          <Tab.Panel>
+            {risks.length === 0 ? (
+              <EmptyState 
+                title="No risks identified" 
+                description="Start by adding a risk assessment for this engagement." 
+                icon={ExclamationTriangleIcon} 
+                actionLabel="Add Risk" 
+                onAction={openModal} 
+              />
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {risks.map(risk => (
+                  <div key={risk.id} className="card hover:shadow-md transition-shadow border border-gray-100">
+                    <div className="flex justify-between items-start mb-3">
+                      <span className={`px-2 py-1 text-xs rounded font-medium border ${getRiskColor(risk.riskLevel)}`}>
+                        {risk.riskLevel}
+                      </span>
+                      <span className="text-xs text-gray-400 font-mono">{risk.category}</span>
+                    </div>
+                    <h3 className="font-semibold text-gray-900 mb-2 line-clamp-2">{risk.riskDescription}</h3>
+                    
+                    <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 bg-gray-50 p-2 rounded mb-3">
+                      <div>Likelihood: <span className="font-medium text-gray-900">{risk.likelihood}</span></div>
+                      <div>Impact: <span className="font-medium text-gray-900">{risk.impact}</span></div>
+                    </div>
+
+                    {risk.mitigationPlan && (
+                      <div className="text-xs text-gray-500 mb-4 border-l-2 border-primary-200 pl-2">
+                        <span className="block font-medium text-primary-700 mb-0.5">Mitigation</span>
+                        <p className="line-clamp-2">{risk.mitigationPlan}</p>
+                      </div>
+                    )}
+
+                    <div className="flex justify-end gap-2 pt-2 border-t border-gray-50">
+                      <button onClick={() => openModal(risk)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"><PencilIcon className="h-4 w-4"/></button>
+                      <button onClick={() => handleDelete(risk.id)} className="p-1.5 text-red-600 hover:bg-red-50 rounded"><TrashIcon className="h-4 w-4"/></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Tab.Panel>
+
+          {/* TAB 2: MATRIX HEATMAP */}
+          <Tab.Panel>
+            {!matrixData ? (
+              <div className="text-center py-12 text-gray-500">Select an engagement to view the matrix.</div>
+            ) : (
+              <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                <div className="grid grid-cols-[auto_1fr] gap-4">
+                  {/* Y-Axis Label */}
+                  <div className="flex items-center justify-center font-bold text-gray-400 -rotate-90 w-8">
+                    LIKELIHOOD
+                  </div>
+                  
                   <div className="flex-1">
-                    <h3 className="text-lg font-medium text-gray-900 mb-1">{risk.title}</h3>
-                    <p className="text-sm text-gray-600 mb-2">{getEngagementName(risk.engagementId)}</p>
-                    <p className="text-sm text-gray-500 line-clamp-2">{risk.description}</p>
+                    <div className="grid grid-cols-3 gap-4 mb-4">
+                      {/* Row 1: High Likelihood */}
+                      <MatrixCell risks={matrixData.matrix.HIGH.LOW} label="High / Low" />
+                      <MatrixCell risks={matrixData.matrix.HIGH.MEDIUM} label="High / Med" />
+                      <MatrixCell risks={matrixData.matrix.HIGH.HIGH} label="High / High" />
+
+                      {/* Row 2: Med Likelihood */}
+                      <MatrixCell risks={matrixData.matrix.MEDIUM.LOW} label="Med / Low" />
+                      <MatrixCell risks={matrixData.matrix.MEDIUM.MEDIUM} label="Med / Med" />
+                      <MatrixCell risks={matrixData.matrix.MEDIUM.HIGH} label="Med / High" />
+
+                      {/* Row 3: Low Likelihood */}
+                      <MatrixCell risks={matrixData.matrix.LOW.LOW} label="Low / Low" />
+                      <MatrixCell risks={matrixData.matrix.LOW.MEDIUM} label="Low / Med" />
+                      <MatrixCell risks={matrixData.matrix.LOW.HIGH} label="Low / High" />
+                    </div>
+                    
+                    {/* X-Axis Label */}
+                    <div className="grid grid-cols-3 text-center text-xs font-bold text-gray-400 uppercase">
+                      <div>Low Impact</div>
+                      <div>Medium Impact</div>
+                      <div>High Impact</div>
+                    </div>
                   </div>
-                </div>
-                <div className="flex flex-col items-end space-y-2">
-                  <span className={`badge ${getRiskLevelColor(risk.riskLevel || "")} capitalize border`}>
-                    {risk.riskLevel}
-                  </span>
-                  <span className={`badge ${getStatusColor(risk.status)} capitalize`}>
-                    {risk.status}
-                  </span>
                 </div>
               </div>
+            )}
+          </Tab.Panel>
 
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="font-medium text-gray-700">Likelihood:</span>
-                    <span className={`ml-2 capitalize ${
-                      risk.likelihood === 'high' ? 'text-red-600' :
-                      risk.likelihood === 'medium' ? 'text-yellow-600' : 'text-green-600'
-                    }`}>
-                      {risk.likelihood}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="font-medium text-gray-700">Impact:</span>
-                    <span className={`ml-2 capitalize ${
-                      risk.impact === 'high' ? 'text-red-600' :
-                      risk.impact === 'medium' ? 'text-yellow-600' : 'text-green-600'
-                    }`}>
-                      {risk.impact}
-                    </span>
+          {/* TAB 3: REPORT */}
+          <Tab.Panel>
+            {!reportData ? (
+              <div className="text-center py-12 text-gray-500">Select an engagement to view the report.</div>
+            ) : (
+              <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200 max-w-4xl mx-auto">
+                <div className="border-b pb-4 mb-6">
+                  <h2 className="text-2xl font-bold text-gray-900">Risk Assessment Report</h2>
+                  <p className="text-gray-500 mt-1">Generated for: <span className="font-medium text-gray-900">{reportData.engagement.name}</span></p>
+                  <div className="flex gap-4 mt-2 text-sm text-gray-500">
+                    <span>Client: {reportData.engagement.client}</span>
+                    <span>•</span>
+                    <span>Date: {new Date(reportData.generatedAt).toLocaleDateString()}</span>
                   </div>
                 </div>
 
-                {risk.mitigation && (
-                  <div>
-                    <span className="font-medium text-gray-700 text-sm">Mitigation:</span>
-                    <p className="text-sm text-gray-600 mt-1 line-clamp-2">{risk.mitigation}</p>
+                <div className="grid grid-cols-3 gap-6 mb-8">
+                  <div className="bg-red-50 p-4 rounded-lg text-center">
+                    <span className="block text-2xl font-bold text-red-700">{reportData.summary.highRisks}</span>
+                    <span className="text-xs text-red-600 uppercase font-medium">High Risks</span>
                   </div>
-                )}
-              </div>
+                  <div className="bg-gray-50 p-4 rounded-lg text-center">
+                    <span className="block text-2xl font-bold text-gray-900">{reportData.summary.totalRisks}</span>
+                    <span className="text-xs text-gray-500 uppercase font-medium">Total Identified</span>
+                  </div>
+                  <div className="bg-gray-50 p-4 rounded-lg text-center">
+                    <span className="block text-2xl font-bold text-gray-900">{reportData.summary.categoriesAssessed}</span>
+                    <span className="text-xs text-gray-500 uppercase font-medium">Categories</span>
+                  </div>
+                </div>
 
-              <div className="mt-6 flex justify-between items-center">
-                <span className="text-xs text-gray-500">
-                  Created {risk.createdAt ? new Date(risk.createdAt).toLocaleDateString() : 'N/A'}
-                </span>
-                <div className="flex space-x-2">
-                  <button
-                    onClick={() => openModal(risk)}
-                    className="text-primary-600 hover:text-primary-900"
-                    title="Edit risk assessment"
-                  >
-                    <PencilIcon className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteRisk(risk.id)}
-                    className="text-red-600 hover:text-red-900"
-                    title="Delete risk assessment"
-                  >
-                    <TrashIcon className="h-4 w-4" />
-                  </button>
+                <div className="space-y-6">
+                  <h3 className="text-lg font-semibold text-gray-900">Executive Recommendations</h3>
+                  <ul className="space-y-3">
+                    {reportData.recommendations.map((rec, i) => (
+                      <li key={i} className="flex gap-3 bg-blue-50 p-3 rounded-md">
+                        <ExclamationTriangleIcon className="h-5 w-5 text-blue-600 flex-shrink-0" />
+                        <span className="text-sm text-blue-900">{rec.message}</span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  <h3 className="text-lg font-semibold text-gray-900 pt-4">High Priority Risks</h3>
+                  <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg">
+                    {reportData.highPriorityRisks.map(risk => (
+                      <div key={risk.id} className="p-4">
+                        <div className="flex justify-between mb-1">
+                          <span className="font-medium text-gray-900">{risk.category}</span>
+                          <span className="text-xs font-bold text-red-600">HIGH PRIORITY</span>
+                        </div>
+                        <p className="text-sm text-gray-600 mb-2">{risk.riskDescription}</p>
+                        <p className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
+                          <strong>Mitigation:</strong> {risk.mitigationPlan}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            )}
+          </Tab.Panel>
+        </Tab.Panels>
+      </Tab.Group>
 
+      {/* CREATE/EDIT MODAL */}
       <Transition appear show={isModalOpen} as={Fragment}>
-        <Dialog as="div" className="relative z-10" onClose={closeModal}>
-          <Transition.Child
-            as={Fragment}
-            enter="ease-out duration-300"
-            enterFrom="opacity-0"
-            enterTo="opacity-100"
-            leave="ease-in duration-200"
-            leaveFrom="opacity-100"
-            leaveTo="opacity-0"
-          >
-            <div className="fixed inset-0 bg-black bg-opacity-25" />
-          </Transition.Child>
-
+        <Dialog as="div" className="relative z-50" onClose={closeModal}>
+          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" />
           <div className="fixed inset-0 overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4 text-center">
-              <Transition.Child
-                as={Fragment}
-                enter="ease-out duration-300"
-                enterFrom="opacity-0 scale-95"
-                enterTo="opacity-100 scale-100"
-                leave="ease-in duration-200"
-                leaveFrom="opacity-100 scale-100"
-                leaveTo="opacity-0 scale-95"
-              >
-                <Dialog.Panel className="w-full max-w-2xl transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
-                  <Dialog.Title
-                    as="h3"
-                    className="text-lg font-medium leading-6 text-gray-900 mb-4"
-                  >
-                    {editingRisk ? 'Edit Risk Assessment' : 'New Risk Assessment'}
-                  </Dialog.Title>
+            <div className="flex min-h-full items-center justify-center p-4">
+              <Dialog.Panel className="w-full max-w-lg bg-white rounded-2xl p-6 shadow-xl">
+                <Dialog.Title className="text-lg font-bold text-gray-900 mb-6">
+                  {editingRisk ? 'Edit Risk' : 'Identify New Risk'}
+                </Dialog.Title>
+                
+                <form onSubmit={handleSubmit(handleSaveRisk)} className="space-y-4">
+                  <div>
+                    <label className="label">Engagement</label>
+                    <select 
+                      {...register('engagementId', { required: 'Required' })} 
+                      className="input"
+                      disabled={!!editingRisk} // Usually simpler to not move risks between engagements
+                    >
+                      <option value="">Select...</option>
+                      {engagements.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                    </select>
+                    {errors.engagementId && <span className="text-error">Required</span>}
+                  </div>
 
-                  <form
-                    onSubmit={handleSubmit(editingRisk ? handleUpdateRisk : handleCreateRisk)}
-                    className="space-y-4"
-                  >
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="md:col-span-2">
-                        <label className="label">Title</label>
-                        <input
-                          {...register('title', { required: 'Title is required' })}
-                          type="text"
-                          className="input"
-                          placeholder="Enter risk title"
-                        />
-                        {errors.title && (
-                          <p className="mt-1 text-sm text-red-600">{errors.title.message}</p>
-                        )}
-                      </div>
+                  <div>
+                    <label className="label">Category</label>
+                    <select {...register('category', { required: 'Required' })} className="input">
+                      <option value="REVENUE">Revenue</option>
+                      <option value="ASSETS">Assets</option>
+                      <option value="LIABILITIES">Liabilities</option>
+                      <option value="EXPENSES">Expenses</option>
+                      <option value="COMPLIANCE">Compliance</option>
+                      <option value="FRAUD">Fraud</option>
+                      <option value="IT">IT & Systems</option>
+                    </select>
+                  </div>
 
-                      <div>
-                        <label className="label">Engagement</label>
-                        <select {...register('engagementId', { required: 'Engagement is required' })} className="input">
-                          <option value="">Select engagement</option>
-                          {engagements.map((engagement) => (
-                            <option key={engagement.id} value={engagement.id}>
-                              {engagement.title}
-                            </option>
-                          ))}
-                        </select>
-                        {errors.engagementId && (
-                          <p className="mt-1 text-sm text-red-600">{errors.engagementId.message}</p>
-                        )}
-                      </div>
+                  <div>
+                    <label className="label">Risk Description</label>
+                    <textarea 
+                      {...register('riskDescription', { required: 'Required' })} 
+                      className="input" 
+                      rows={2}
+                      placeholder="Describe the risk..."
+                    />
+                    {errors.riskDescription && <span className="text-error">Required</span>}
+                  </div>
 
-                      <div>
-                        <label className="label">Risk Level</label>
-                        <select {...register('riskLevel', { required: 'Risk level is required' })} className="input">
-                          <option value="">Select risk level</option>
-                          {riskLevels.map((level) => (
-                            <option key={level} value={level} className="capitalize">
-                              {level}
-                            </option>
-                          ))}
-                        </select>
-                        {errors.riskLevel && (
-                          <p className="mt-1 text-sm text-red-600">{errors.riskLevel.message}</p>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="label">Likelihood</label>
-                        <select {...register('likelihood', { required: 'Likelihood is required' })} className="input">
-                          <option value="">Select likelihood</option>
-                          {likelihoodLevels.map((level) => (
-                            <option key={level} value={level} className="capitalize">
-                              {level}
-                            </option>
-                          ))}
-                        </select>
-                        {errors.likelihood && (
-                          <p className="mt-1 text-sm text-red-600">{errors.likelihood.message}</p>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="label">Impact</label>
-                        <select {...register('impact', { required: 'Impact is required' })} className="input">
-                          <option value="">Select impact</option>
-                          {impactLevels.map((level) => (
-                            <option key={level} value={level} className="capitalize">
-                              {level}
-                            </option>
-                          ))}
-                        </select>
-                        {errors.impact && (
-                          <p className="mt-1 text-sm text-red-600">{errors.impact.message}</p>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="label">Status</label>
-                        <select {...register('status', { required: 'Status is required' })} className="input">
-                          <option value="">Select status</option>
-                          {riskStatuses.map((status) => (
-                            <option key={status} value={status} className="capitalize">
-                              {status}
-                            </option>
-                          ))}
-                        </select>
-                        {errors.status && (
-                          <p className="mt-1 text-sm text-red-600">{errors.status.message}</p>
-                        )}
-                      </div>
-
-                      <div className="md:col-span-2">
-                        <label className="label">Description</label>
-                        <textarea
-                          {...register('description', { required: 'Description is required' })}
-                          rows={3}
-                          className="input"
-                          placeholder="Describe the risk"
-                        />
-                        {errors.description && (
-                          <p className="mt-1 text-sm text-red-600">{errors.description.message}</p>
-                        )}
-                      </div>
-
-                      <div className="md:col-span-2">
-                        <label className="label">Mitigation Strategy</label>
-                        <textarea
-                          {...register('mitigation')}
-                          rows={3}
-                          className="input"
-                          placeholder="Describe mitigation strategies"
-                        />
-                        {errors.mitigation && (
-                          <p className="mt-1 text-sm text-red-600">{errors.mitigation.message}</p>
-                        )}
-                      </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="label">Level</label>
+                      <select {...register('riskLevel')} className="input">
+                        <option value="LOW">Low</option>
+                        <option value="MEDIUM">Medium</option>
+                        <option value="HIGH">High</option>
+                        <option value="CRITICAL">Critical</option>
+                      </select>
                     </div>
-
-                    <div className="flex justify-end space-x-3 pt-4">
-                      <button type="button" onClick={closeModal} className="btn-secondary">
-                        Cancel
-                      </button>
-                      <button type="submit" className="btn-primary">
-                        {editingRisk ? 'Update' : 'Create'} Risk Assessment
-                      </button>
+                    <div>
+                      <label className="label">Likelihood</label>
+                      <select {...register('likelihood')} className="input">
+                        <option value="LOW">Low</option>
+                        <option value="MEDIUM">Medium</option>
+                        <option value="HIGH">High</option>
+                      </select>
                     </div>
-                  </form>
-                </Dialog.Panel>
-              </Transition.Child>
+                    <div>
+                      <label className="label">Impact</label>
+                      <select {...register('impact')} className="input">
+                        <option value="LOW">Low</option>
+                        <option value="MEDIUM">Medium</option>
+                        <option value="HIGH">High</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="label">Mitigation Plan</label>
+                    <textarea 
+                      {...register('mitigationPlan')} 
+                      className="input" 
+                      rows={3}
+                      placeholder="Planned audit procedures..."
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-3 mt-6">
+                    <button type="button" onClick={closeModal} className="btn-secondary">Cancel</button>
+                    <button type="submit" className="btn-primary">Save Risk</button>
+                  </div>
+                </form>
+              </Dialog.Panel>
             </div>
           </div>
         </Dialog>

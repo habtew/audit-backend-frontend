@@ -26,6 +26,7 @@ const Users: React.FC = () => {
     register,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<Partial<User>>();
 
@@ -42,15 +43,18 @@ const Users: React.FC = () => {
       setLoading(true);
       const response: any = await apiClient.getUsers();
       
-      // ROBUST DATA EXTRACTION to prevent crashes
+      // Robust extraction
       let userData: User[] = [];
+      // Case 1: Direct Array
       if (Array.isArray(response)) {
         userData = response;
-      } else if (response?.data && Array.isArray(response.data)) {
+      } 
+      // Case 2: { data: [...] }
+      else if (response?.data && Array.isArray(response.data)) {
         userData = response.data;
-      } else if (response?.users && Array.isArray(response.users)) {
-        userData = response.users;
-      } else if (response?.data?.users && Array.isArray(response.data.users)) {
+      } 
+      // Case 3: { data: { users: [...] } } - Common for pagination
+      else if (response?.data?.users && Array.isArray(response.data.users)) {
         userData = response.data.users;
       }
       
@@ -63,30 +67,36 @@ const Users: React.FC = () => {
     }
   };
 
-  // ... handlers for create/update/delete (same as before)
   const handleCreateUser = async (data: Partial<User>) => {
     try {
       await apiClient.createUser(data);
       toast.success('User created successfully');
       fetchUsers();
-      setIsModalOpen(false);
-      reset();
-    } catch (error) {
-      toast.error('Failed to create user');
+      closeModal();
+    } catch (error: any) {
+      const msg = error?.response?.data?.message || 'Failed to create user';
+      toast.error(typeof msg === 'string' ? msg : 'Error creating user');
     }
   };
 
   const handleUpdateUser = async (data: Partial<User>) => {
     if (!editingUser) return;
     try {
-      await apiClient.updateUser(editingUser.id, data);
+      const payload = {
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email,
+        role: data.role,
+        isActive: editingUser.isActive // Preserve status or allow update if added to form
+      };
+      
+      await apiClient.updateUser(editingUser.id, payload);
       toast.success('User updated successfully');
       fetchUsers();
-      setIsModalOpen(false);
-      setEditingUser(null);
-      reset();
-    } catch (error) {
-      toast.error('Failed to update user');
+      closeModal();
+    } catch (error: any) {
+      const msg = error?.response?.data?.message || 'Failed to update user';
+      toast.error(typeof msg === 'string' ? msg : 'Error updating user');
     }
   };
 
@@ -114,10 +124,18 @@ const Users: React.FC = () => {
   const openModal = (user?: User) => {
     if (user) {
       setEditingUser(user);
-      reset(user);
+      // Populate form with correct fields
+      reset({
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        role: user.role,
+      });
     } else {
       setEditingUser(null);
-      reset();
+      reset({
+        role: 'STAFF'
+      });
     }
     setIsModalOpen(true);
   };
@@ -128,7 +146,6 @@ const Users: React.FC = () => {
     reset();
   };
 
-  // ACCESS DENIED VIEW
   if (!canManageUsers) {
     return (
       <div className="flex flex-col items-center justify-center h-96 bg-white rounded-lg shadow-sm border border-gray-200">
@@ -151,31 +168,37 @@ const Users: React.FC = () => {
     );
   }
 
-  // Safe array check
   const safeUsers = Array.isArray(users) ? users : [];
   
-  const filteredUsers = safeUsers.filter(user =>
-    user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.role?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredUsers = safeUsers.filter(user => {
+    const fullName = `${user.firstName || ''} ${user.lastName || ''} ${user.name || ''}`.toLowerCase();
+    return (
+      fullName.includes(searchTerm.toLowerCase()) ||
+      user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.role?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  });
 
   const getRoleColor = (role: string) => {
-    switch (role?.toLowerCase()) {
-      case 'admin': return 'badge-error';
-      case 'manager': return 'badge-warning';
-      case 'user': case 'staff': return 'badge-primary';
-      default: return 'badge-gray';
+    switch (role?.toUpperCase()) {
+      case 'ADMIN': return 'bg-red-100 text-red-800';
+      case 'MANAGER': return 'bg-orange-100 text-orange-800';
+      case 'PARTNER': return 'bg-purple-100 text-purple-800';
+      case 'SENIOR': return 'bg-blue-100 text-blue-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const getStatusColor = (status: string) => {
-    return status === 'active' ? 'badge-success' : 'badge-gray';
+  // Helper to check status (Backend returns boolean isActive)
+  const isUserActive = (user: User) => {
+    // Check strict boolean first
+    if (typeof user.isActive === 'boolean') return user.isActive;
+    // Fallback to string check if data is old/different
+    return user.status === 'active';
   };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Users</h1>
@@ -187,7 +210,6 @@ const Users: React.FC = () => {
         </button>
       </div>
 
-      {/* Search */}
       <div className="relative">
         <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
         <input
@@ -195,11 +217,10 @@ const Users: React.FC = () => {
           placeholder="Search users..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="input pl-10"
+          className="input pl-10 w-full"
         />
       </div>
 
-      {/* Users List */}
       {filteredUsers.length === 0 ? (
         <EmptyState
           title="No users found"
@@ -208,7 +229,7 @@ const Users: React.FC = () => {
           onAction={() => openModal()}
         />
       ) : (
-        <div className="card p-0">
+        <div className="card p-0 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -225,28 +246,35 @@ const Users: React.FC = () => {
                   <tr key={user.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
-                        <div className="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center">
-                          <span className="text-primary-600 font-medium">
-                            {(user.name || user.firstName || '?').charAt(0).toUpperCase()}
+                        <div className="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center flex-shrink-0">
+                          <span className="text-primary-700 font-semibold text-sm">
+                            {(user.firstName?.[0] || user.name?.[0] || '?').toUpperCase()}
+                            {(user.lastName?.[0] || '').toUpperCase()}
                           </span>
                         </div>
                         <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">{user.name || `${user.firstName} ${user.lastName}`}</div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {user.firstName ? `${user.firstName} ${user.lastName}` : user.name}
+                          </div>
                           <div className="text-sm text-gray-500">{user.email}</div>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`badge ${getRoleColor(user.role ?? '')} capitalize`}>
-                        {user.role ?? 'N/A'}
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoleColor(user.role ?? '')}`}>
+                        {user.role}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <button
                         onClick={() => handleToggleStatus(user.id)}
-                        className={`badge ${getStatusColor(user.status ?? 'inactive')} capitalize cursor-pointer hover:opacity-80`}
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium cursor-pointer transition-colors ${
+                          isUserActive(user) 
+                            ? 'bg-green-100 text-green-800 hover:bg-green-200' 
+                            : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                        }`}
                       >
-                       {user.status ?? 'inactive'}
+                       {isUserActive(user) ? 'Active' : 'Inactive'}
                       </button>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -254,10 +282,10 @@ const Users: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex justify-end space-x-2">
-                        <button onClick={() => openModal(user)} className="text-primary-600 hover:text-primary-900">
+                        <button onClick={() => openModal(user)} className="text-blue-600 hover:text-blue-900 p-1 hover:bg-blue-50 rounded">
                           <PencilIcon className="h-4 w-4" />
                         </button>
-                        <button onClick={() => handleDeleteUser(user.id)} className="text-red-600 hover:text-red-900">
+                        <button onClick={() => handleDeleteUser(user.id)} className="text-red-600 hover:text-red-900 p-1 hover:bg-red-50 rounded">
                           <TrashIcon className="h-4 w-4" />
                         </button>
                       </div>
@@ -273,68 +301,87 @@ const Users: React.FC = () => {
       {/* Modal */}
       <Transition appear show={isModalOpen} as={Fragment}>
         <Dialog as="div" className="relative z-10" onClose={closeModal}>
-          <Transition.Child
-            as={Fragment}
-            enter="ease-out duration-300"
-            enterFrom="opacity-0"
-            enterTo="opacity-100"
-            leave="ease-in duration-200"
-            leaveFrom="opacity-100"
-            leaveTo="opacity-0"
-          >
-            <div className="fixed inset-0 bg-black bg-opacity-25" />
-          </Transition.Child>
-
+          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" />
           <div className="fixed inset-0 overflow-y-auto">
             <div className="flex min-h-full items-center justify-center p-4 text-center">
-              <Transition.Child
-                as={Fragment}
-                enter="ease-out duration-300"
-                enterFrom="opacity-0 scale-95"
-                enterTo="opacity-100 scale-100"
-                leave="ease-in duration-200"
-                leaveFrom="opacity-100 scale-100"
-                leaveTo="opacity-0 scale-95"
-              >
-                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
-                  <Dialog.Title as="h3" className="text-lg font-medium leading-6 text-gray-900 mb-4">
-                    {editingUser ? 'Edit User' : 'Add New User'}
-                  </Dialog.Title>
-                  <form onSubmit={handleSubmit(editingUser ? handleUpdateUser : handleCreateUser)} className="space-y-4">
+              <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
+                <Dialog.Title as="h3" className="text-lg font-medium leading-6 text-gray-900 mb-4">
+                  {editingUser ? 'Edit User' : 'Add New User'}
+                </Dialog.Title>
+                <form onSubmit={handleSubmit(editingUser ? handleUpdateUser : handleCreateUser)} className="space-y-4">
+                  
+                  {/* Split Name Fields */}
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="label">Name</label>
-                      <input {...register('name', { required: 'Name is required' })} type="text" className="input" placeholder="Enter user name" />
-                      {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>}
-                    </div>
-                    <div>
-                      <label className="label">Email</label>
-                      <input {...register('email', { required: 'Email is required', pattern: { value: /^\S+@\S+$/i, message: 'Invalid email address' } })} type="email" className="input" placeholder="Enter email address" />
-                      {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>}
+                      <label className="label">First Name</label>
+                      <input 
+                        {...register('firstName', { required: 'First Name is required' })} 
+                        type="text" 
+                        className="input" 
+                        placeholder="John" 
+                      />
+                      {errors.firstName && <p className="text-error">{errors.firstName.message}</p>}
                     </div>
                     <div>
-                      <label className="label">Role</label>
-                      <select {...register('role', { required: 'Role is required' })} className="input">
-                        <option value="">Select role</option>
-                        <option value="user">User</option>
-                        <option value="manager">Manager</option>
-                        <option value="admin">Admin</option>
-                      </select>
-                      {errors.role && <p className="mt-1 text-sm text-red-600">{errors.role.message}</p>}
+                      <label className="label">Last Name</label>
+                      <input 
+                        {...register('lastName', { required: 'Last Name is required' })} 
+                        type="text" 
+                        className="input" 
+                        placeholder="Doe" 
+                      />
+                      {errors.lastName && <p className="text-error">{errors.lastName.message}</p>}
                     </div>
-                    {!editingUser && (
-                      <div>
-                        <label className="label">Password</label>
-                        <input {...register('password', { required: 'Password is required', minLength: { value: 6, message: 'Password must be at least 6 characters' } })} type="password" className="input" placeholder="Enter password" />
-                        {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>}
-                      </div>
-                    )}
-                    <div className="flex justify-end space-x-3 pt-4">
-                      <button type="button" onClick={closeModal} className="btn-secondary">Cancel</button>
-                      <button type="submit" className="btn-primary">{editingUser ? 'Update' : 'Create'} User</button>
+                  </div>
+
+                  <div>
+                    <label className="label">Email</label>
+                    <input 
+                      {...register('email', { 
+                        required: 'Email is required', 
+                        pattern: { value: /^\S+@\S+$/i, message: 'Invalid email address' } 
+                      })} 
+                      type="email" 
+                      className="input" 
+                      placeholder="john@example.com" 
+                    />
+                    {errors.email && <p className="text-error">{errors.email.message}</p>}
+                  </div>
+
+                  <div>
+                    <label className="label">Role</label>
+                    <select {...register('role', { required: 'Role is required' })} className="input">
+                      <option value="STAFF">Staff</option>
+                      <option value="SENIOR">Senior</option>
+                      <option value="MANAGER">Manager</option>
+                      <option value="PARTNER">Partner</option>
+                      <option value="ADMIN">Admin</option>
+                    </select>
+                    {errors.role && <p className="text-error">{errors.role.message}</p>}
+                  </div>
+
+                  {!editingUser && (
+                    <div>
+                      <label className="label">Password</label>
+                      <input 
+                        {...register('password', { 
+                          required: 'Password is required', 
+                          minLength: { value: 6, message: 'Min 6 characters' } 
+                        })} 
+                        type="password" 
+                        className="input" 
+                        placeholder="••••••" 
+                      />
+                      {errors.password && <p className="text-error">{errors.password.message}</p>}
                     </div>
-                  </form>
-                </Dialog.Panel>
-              </Transition.Child>
+                  )}
+
+                  <div className="flex justify-end space-x-3 pt-4">
+                    <button type="button" onClick={closeModal} className="btn-secondary">Cancel</button>
+                    <button type="submit" className="btn-primary">{editingUser ? 'Update' : 'Create'}</button>
+                  </div>
+                </form>
+              </Dialog.Panel>
             </div>
           </div>
         </Dialog>
