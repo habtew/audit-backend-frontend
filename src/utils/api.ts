@@ -329,6 +329,236 @@ class ApiClient {
   async getRiskReport(engagementId: string): Promise<ApiResponse<RiskReport>> {
     return this.get<ApiResponse<RiskReport>>(`/risk-assessments/engagements/${engagementId}/report`);
   }
+
+
+  // trial balance endpoints would go here
+  // 1. Upload/Import Trial Balance (Uses DataImportController)
+  async importTrialBalance(data: ImportTrialBalancePayload): Promise<ApiResponse<TrialBalance>> {
+    const formData = new FormData();
+    formData.append('file', data.file);
+    formData.append('engagementId', data.engagementId);
+    formData.append('period', data.period);
+    if (data.description) formData.append('description', data.description);
+
+    const response = await this.client.post<ApiResponse<TrialBalance>>('/data-import/trial-balance', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  }
+
+  // 2. Get List of Trial Balances
+  async getTrialBalances(params?: { engagementId?: string; page?: number; limit?: number }): Promise<ApiResponse<{ trialBalances: TrialBalance[]; pagination: any }>> {
+    return this.get('/trial-balances', params);
+  }
+
+  // 3. Get Single Trial Balance Details (with accounts)
+  async getTrialBalanceById(id: string): Promise<ApiResponse<TrialBalance>> {
+    return this.get<ApiResponse<TrialBalance>>(`/trial-balances/${id}`);
+  }
+
+  // 4. Update a specific Account (Mapping)
+  async updateTrialBalanceAccount(
+    trialBalanceId: string, 
+    accountId: string, 
+    data: UpdateAccountPayload
+  ): Promise<ApiResponse<TrialBalanceAccount>> {
+    return this.put<ApiResponse<TrialBalanceAccount>>(
+      `/trial-balances/${trialBalanceId}/accounts/${accountId}`, 
+      data
+    );
+  }
+
+  // 5. Delete Trial Balance
+  async deleteTrialBalance(id: string): Promise<ApiResponse<void>> {
+    return this.delete<ApiResponse<void>>(`/trial-balances/${id}`);
+  }
+  
+  // 6. Get Summary
+  async getTrialBalanceSummary(id: string): Promise<ApiResponse<any>> {
+    return this.get(`/trial-balances/${id}/summary`);
+  }
+
+  // src/utils/api.ts
+
+// ... inside ApiClient class
+
+  // --- Advanced Trial Balance Features ---
+
+  // 7. Manual Creation
+  async createTrialBalance(data: ManualTrialBalancePayload): Promise<ApiResponse<TrialBalance>> {
+    return this.post<ApiResponse<TrialBalance>>('/trial-balances', data);
+  }
+
+  // 8. Add Adjustment (Journal Entry)
+  async addAdjustment(
+    trialBalanceId: string, 
+    accountId: string, 
+    data: AdjustmentPayload
+  ): Promise<ApiResponse<void>> {
+    return this.post<ApiResponse<void>>(
+      `/trial-balances/${trialBalanceId}/accounts/${accountId}/adjustments`, 
+      data
+    );
+  }
+
+  // 9. Compare Versions
+  async compareTrialBalances(
+    currentId: string, 
+    previousId: string
+  ): Promise<ApiResponse<ComparisonResult[]>> {
+    return this.get<ApiResponse<ComparisonResult[]>>(
+      `/trial-balances/${currentId}/compare/${previousId}`
+    );
+  }
+
+  // 10. Export to Excel
+  async exportTrialBalance(id: string): Promise<Blob> {
+    const response = await this.client.get(`/trial-balances/${id}/export`, {
+      responseType: 'blob', // Important for file downloads
+    });
+    return response.data;
+  }
+
+  // 11. Get Import History
+  async getImportHistory(engagementId: string): Promise<ApiResponse<ImportHistory[]>> {
+    return this.get<ApiResponse<ImportHistory[]>>(`/data-import/history?engagementId=${engagementId}`);
+  }
+
+  // 12. Validate File (Pre-check)
+  async validateImportFile(file: File): Promise<ApiResponse<ValidationResult>> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.post<ApiResponse<ValidationResult>>('/data-import/validate', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  }
+
+  // 13. Download Template
+  async getImportTemplate(type: string = 'trial-balance'): Promise<Blob> {
+    const response = await this.client.get(`/data-import/template/${type}`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  }
+
+  // --- Billing: Invoices ---
+
+  async getInvoices(params?: { status?: string; clientId?: string }): Promise<ApiResponse<Invoice[]>> {
+    return this.get<ApiResponse<Invoice[]>>('/invoices', params);
+  }
+
+  async getInvoiceById(id: string): Promise<ApiResponse<Invoice>> {
+    return this.get<ApiResponse<Invoice>>(`/invoices/${id}`);
+  }
+
+  async createInvoice(data: CreateInvoicePayload): Promise<ApiResponse<Invoice>> {
+    return this.post<ApiResponse<Invoice>>('/invoices', data);
+  }
+
+  // Auto-generate based on unbilled hours
+  async generateInvoice(engagementId: string): Promise<ApiResponse<Invoice>> {
+    return this.post<ApiResponse<Invoice>>(`/invoices/generate/${engagementId}`);
+  }
+
+  async updateInvoice(id: string, data: Partial<CreateInvoicePayload>): Promise<ApiResponse<Invoice>> {
+    return this.put<ApiResponse<Invoice>>(`/invoices/${id}`, data);
+  }
+
+  async markInvoicePaid(id: string): Promise<ApiResponse<Invoice>> {
+    return this.put<ApiResponse<Invoice>>(`/invoices/${id}/pay`, {});
+  }
+
+  async sendInvoice(id: string): Promise<ApiResponse<void>> {
+    return this.post<ApiResponse<void>>(`/invoices/${id}/send`, {});
+  }
+
+  async deleteInvoice(id: string): Promise<ApiResponse<void>> {
+    return this.delete<ApiResponse<void>>(`/invoices/${id}`);
+  }
+
+  async getInvoicePreview(id: string): Promise<Blob> {
+    const response = await this.client.get(`/invoices/${id}/preview`, { responseType: 'blob' });
+    return response.data;
+  }
+
+  // --- Billing: Billable Hours ---
+
+  async getBillableHours(params?: { isBilled?: boolean; engagementId?: string }): Promise<ApiResponse<BillableHour[]>> {
+    return this.get<ApiResponse<BillableHour[]>>('/billable-hours', params);
+  }
+
+  async createTimeEntry(data: CreateTimeEntryPayload): Promise<ApiResponse<BillableHour>> {
+    return this.post<ApiResponse<BillableHour>>('/billable-hours', data);
+  }
+
+  async getUnbilledSummary(engagementId: string): Promise<ApiResponse<{ totalHours: number; totalAmount: number; count: number }>> {
+    return this.get(`/billable-hours/summary/engagement/${engagementId}`);
+  }
+
+
+  // =================================================================
+  // 📊 ANALYTICS MODULE
+  // =================================================================
+
+  // --- 1. Core Analytics (New Endpoints) ---
+
+  /**
+   * Get detailed engagement statistics (counts, duration, status distribution).
+   * Endpoint: GET /analytics/engagements
+   */
+  async getEngagementAnalytics(params?: AnalyticsDateParams): Promise<ApiResponse<EngagementAnalytics>> {
+    return this.get<ApiResponse<EngagementAnalytics>>('/analytics/engagements', params);
+  }
+
+  /**
+   * Get metrics on user productivity and task completion.
+   * Endpoint: GET /analytics/users/performance
+   */
+  async getUserPerformance(params?: AnalyticsDateParams): Promise<ApiResponse<UserPerformanceMetrics[]>> {
+    return this.get<ApiResponse<UserPerformanceMetrics[]>>('/analytics/users/performance', params);
+  }
+
+  /**
+   * Analysis of billable vs. non-billable hours.
+   * Endpoint: GET /analytics/billing/hours
+   */
+  async getBillingAnalytics(params?: AnalyticsDateParams): Promise<ApiResponse<BillingAnalytics>> {
+    return this.get<ApiResponse<BillingAnalytics>>('/analytics/billing/hours', params);
+  }
+
+  /**
+   * Get real-time progress percentage for a specific engagement.
+   * Endpoint: GET /analytics/engagements/:id/progress
+   */
+  async getEngagementProgress(id: string): Promise<ApiResponse<EngagementProgress>> {
+    return this.get<ApiResponse<EngagementProgress>>(`/analytics/engagements/${id}/progress`);
+  }
+
+  /**
+   * Get aggregate risk data (heatmap data, high/low counts).
+   * Endpoint: GET /analytics/risk
+   */
+  async getRiskAnalytics(params?: AnalyticsDateParams): Promise<ApiResponse<RiskAnalytics>> {
+    return this.get<ApiResponse<RiskAnalytics>>('/analytics/risk', params);
+  }
+
+  // --- 2. Dashboard Analytics (Existing) ---
+
+  async getDashboardOverview(): Promise<ApiResponse<DashboardOverview>> {
+    return this.get<ApiResponse<DashboardOverview>>('/dashboard/overview');
+  }
+
+  async getKPIs(params?: { startDate?: string; endDate?: string }): Promise<ApiResponse<KPI[]>> {
+    return this.get<ApiResponse<KPI[]>>('/dashboard/kpis', params);
+  }
+
+  async getWorkloadDistribution(): Promise<ApiResponse<WorkloadDistribution[]>> {
+    return this.get<ApiResponse<WorkloadDistribution[]>>('/dashboard/workload');
+  }
+
+
 }
 
 export const apiClient = new ApiClient();

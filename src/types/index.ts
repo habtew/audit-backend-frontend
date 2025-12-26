@@ -268,3 +268,169 @@ export interface RiskReport {
   generatedAt: string;
   generatedBy: string;
 }
+
+// trial balancce
+
+export interface TrialBalance {
+  id: string;
+  engagementId: string;
+  period: string; // ISO Date
+  description?: string;
+  status: 'DRAFT' | 'IMPORTED' | 'MAPPED' | 'REVIEWED' | 'FINAL';
+  totalDebit: number;
+  totalCredit: number;
+  createdAt: string;
+  updatedAt: string;
+  engagement?: {
+    name: string;
+    client: { name: string };
+  };
+  accounts?: TrialBalanceAccount[];
+  _count?: {
+    accounts: number;
+  };
+}
+
+export interface TrialBalanceAccount {
+  id: string;
+  accountNumber: string;
+  accountName: string;
+  debitAmount: number;
+  creditAmount: number;
+  balance: number;
+  category?: string;
+  subCategory?: string;
+  isMapped: boolean;
+  mappings?: any[]; // Define specific mapping type if needed
+}
+
+export interface ImportTrialBalancePayload {
+  file: File;
+  engagementId: string;
+  period: string;
+  description?: string;
+}
+
+export interface UpdateAccountPayload {
+  accountName?: string;
+  category?: string;
+  subCategory?: string;
+  note?: string;
+}
+
+
+// inovice types
+export interface InvoiceItem {
+  description: string;
+  quantity: number;
+  rate: number;
+  amount: number;
+}
+
+export interface Invoice {
+  id: string;
+  invoiceNumber: string;
+  clientId: string;
+  engagementId?: string;
+  issueDate: string;
+  dueDate: string;
+  status: 'DRAFT' | 'SENT' | 'PAID' | 'OVERDUE' | 'CANCELLED';
+  subtotal: number;
+  taxAmount: number;
+  totalAmount: number;
+  items: InvoiceItem[];
+  client?: { name: string; email: string };
+  engagement?: { name: string };
+  createdAt: string;
+}
+
+export interface BillableHour {
+  id: string;
+  userId: string;
+  engagementId: string;
+  taskId?: string;
+  description: string;
+  date: string;
+  hours: number;
+  rate: number;
+  amount: number;
+  isBilled: boolean;
+  user?: { name: string };
+  engagement?: { name: string; client: { name: string } };
+}
+
+export interface CreateInvoicePayload {
+  clientId: string;
+  engagementId?: string;
+  issueDate: string;
+  dueDate: string;
+  items: Array<{ description: string; quantity: number; rate: number }>;
+}
+
+export interface GenerateInvoicePayload {
+  engagementId: string;
+  issueDate: string;
+  dueDate: string;
+}
+
+export interface CreateTimeEntryPayload {
+  engagementId: string;
+  description: string;
+  date: string;
+  hours: number;
+}
+
+
+// --- Core Analytics Types ---
+
+export interface AnalyticsDateParams {
+  startDate?: string;
+  endDate?: string;
+  engagementId?: string;
+  userId?: string;
+}
+
+export interface EngagementAnalytics {
+  totalEngagements: number;
+  completedEngagements: number;
+  activeEngagements: number;
+  averageDurationDays: number;
+  statusDistribution: Record<string, number>;
+  engagementsOverTime: Array<{ date: string; count: number }>;
+}
+
+export interface UserPerformanceMetrics {
+  userId: string;
+  userName: string;
+  tasksCompleted: number;
+  tasksOverdue: number;
+  averageCompletionTimeHours: number;
+  efficiencyScore: number; // e.g., 0-100
+}
+
+export interface BillingAnalytics {
+  totalBillableHours: number;
+  totalNonBillableHours: number;
+  billableAmount: number;
+  utilizationRate: number; // percentage
+  breakdownByEngagement: Array<{ engagementName: string; hours: number; amount: number }>;
+}
+
+export interface EngagementProgress {
+  engagementId: string;
+  percentageComplete: number;
+  completedTasks: number;
+  totalTasks: number;
+  remainingTasks: number;
+  expectedCompletionDate: string;
+  status: string;
+}
+
+export interface RiskAnalytics {
+  totalRisks: number;
+  highRisks: number;
+  mediumRisks: number;
+  lowRisks: number;
+  riskHeatmapData: Array<{ impact: string; likelihood: string; count: number }>;
+  topRiskAreas: Array<{ category: string; count: number }>;
+}

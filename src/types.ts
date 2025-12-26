@@ -120,3 +120,54 @@ export interface RiskAssessment {
   description: string;
   createdAt?: string;
 }
+
+export interface AdjustmentPayload {
+  description: string;
+  amount: number;
+  type: 'DEBIT' | 'CREDIT';
+  adjustmentType: 'RECLASSIFICATION' | 'CORRECTION' | 'PROPOSED';
+}
+
+export interface Adjustment {
+  id: string;
+  description: string;
+  amount: number;
+  type: 'DEBIT' | 'CREDIT';
+  createdAt: string;
+}
+
+// --- Comparison ---
+export interface ComparisonResult {
+  accountId: string;
+  accountName: string;
+  accountNumber: string;
+  currentAmount: number;
+  previousAmount: number;
+  variance: number;
+  percentageChange: number;
+}
+
+// --- Import History ---
+export interface ImportHistory {
+  id: string;
+  fileName: string;
+  status: 'SUCCESS' | 'FAILED' | 'PARTIAL';
+  recordCount: number;
+  importedAt: string;
+  importedBy: string;
+}
+
+// --- Validation ---
+export interface ValidationResult {
+  isValid: boolean;
+  errors: string[];
+  warnings: string[];
+  previewData?: any[];
+}
+
+export interface ManualTrialBalancePayload {
+  engagementId: string;
+  period: string;
+  description?: string;
+  name: string;
+}
