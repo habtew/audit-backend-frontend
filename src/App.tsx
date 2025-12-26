@@ -140,6 +140,7 @@ import TrialBalanceDetail from './pages/TrialBalance/TrialBalanceDetail';
 // Import the Billing pages
 import InvoicesList from './pages/Billing/InvoicesList';
 import InvoiceDetail from './pages/Billing/InvoiceDetail';
+import AnalyticsDashboard from './pages/Analytics/AnalyticsDashboard';
 
 import LoadingSpinner from './components/Common/LoadingSpinner';
 import ErrorBoundary from './components/Common/ErrorBoundary';
@@ -235,7 +236,7 @@ function App() {
                 <Route path="billing/invoices/:id" element={<InvoiceDetail />} />
                 
                 {/* Placeholders for remaining modules */}
-                <Route path="analytics" element={<PlaceholderPage title="Analytics" />} />
+                <Route path="analytics" element={<AnalyticsDashboard />} />
                 <Route path="reports" element={<PlaceholderPage title="Reports" />} />
                 <Route path="compliance" element={<PlaceholderPage title="Compliance" />} />
                 <Route path="billing" element={<PlaceholderPage title="Billing Dashboard" />} />

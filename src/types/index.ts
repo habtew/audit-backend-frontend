@@ -434,3 +434,84 @@ export interface RiskAnalytics {
   riskHeatmapData: Array<{ impact: string; likelihood: string; count: number }>;
   topRiskAreas: Array<{ category: string; count: number }>;
 }
+
+
+// --- Analytics & Reporting Types ---
+
+export interface EngagementAnalytics {
+  total: number;
+  active: number;
+  completed: number;
+  byStatus: Record<string, number>;
+  byType: Record<string, number>;
+  averageDurationDays: number;
+}
+
+export interface UserPerformanceMetric {
+  userId: string;
+  userName: string;
+  assignedEngagements: number;
+  completedWorkpapers: number;
+  billableHours: number;
+}
+
+export interface RiskAnalytics {
+  totalRisks: number;
+  byLevel: {
+    LOW: number;
+    MEDIUM: number;
+    HIGH: number;
+    CRITICAL: number;
+  };
+  topRisks: Array<{
+    id: string;
+    title: string;
+    level: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+    likelihood: number;
+    impact: number;
+  }>;
+}
+
+export interface BillingAnalytics {
+  totalHours: number;
+  billableHours: number;
+  nonBillableHours: number;
+  utilizationRate: number;
+  revenueByClient: Array<{ clientName: string; amount: number }>;
+}
+
+export interface ReportTemplate {
+  id: string;
+  code: string;
+  name: string;
+  description: string;
+  supportedFormats: string[]; // e.g. ['PDF', 'EXCEL']
+}
+
+export interface ReportHistory {
+  id: string;
+  templateName: string;
+  generatedBy: string;
+  generatedAt: string;
+  status: 'PROCESSING' | 'COMPLETED' | 'FAILED';
+  downloadUrl?: string;
+}
+
+export interface AuditLog {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  userId: string;
+  userEmail: string;
+  timestamp: string;
+  details: any;
+}
+
+export interface UserAccessLog {
+  userId: string;
+  userName: string;
+  role: string;
+  lastLogin: string;
+  status: 'ACTIVE' | 'INACTIVE';
+}

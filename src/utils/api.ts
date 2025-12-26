@@ -20,15 +20,33 @@ ApiResponse,
   Entity, // Import Entity
   Workpaper,
   RiskMatrix,
-  RiskReport
+  RiskReport,
+  EngagementAnalytics, 
+  UserPerformanceMetric, 
+  RiskAnalytics, 
+  BillingAnalytics,
+  ReportTemplate, 
+  ReportHistory,
+  AuditLog, 
+  UserAccessLog
 } from '../types';
+import { BillingAnalytics } from '../types';
+import { ReportTemplate } from '../types';
+import { RiskAnalytics } from '../types';
+import { ReportHistory } from '../types';
+import { UserPerformanceMetric } from '../types';
 
 // Placeholder types (replace with actual types from your src/types.ts)
 type Entity = any;
 type AssignUserDto = { userId: string; role: string };
 type EngagementTeamUser = any; 
 type SuccessResponse = { message: string | { success: boolean } };
-
+interface AnalyticsQueryParams {
+  startDate?: string;
+  endDate?: string;
+  engagementId?: string;
+  userId?: string;
+}
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
 
@@ -556,6 +574,79 @@ class ApiClient {
 
   async getWorkloadDistribution(): Promise<ApiResponse<WorkloadDistribution[]>> {
     return this.get<ApiResponse<WorkloadDistribution[]>>('/dashboard/workload');
+  }
+
+
+  // ... existing methods
+
+  // ------------------------------------------------
+  // 📊 Analytics Module
+  // ------------------------------------------------
+
+  // General Analytics
+  async getEngagementAnalytics(params?: AnalyticsQueryParams): Promise<ApiResponse<EngagementAnalytics>> {
+    return this.get<ApiResponse<EngagementAnalytics>>('/analytics/engagements', params);
+  }
+
+  async getUserPerformance(params?: AnalyticsQueryParams): Promise<ApiResponse<UserPerformanceMetric[]>> {
+    return this.get<ApiResponse<UserPerformanceMetric[]>>('/analytics/users/performance', params);
+  }
+
+  async getRiskAnalytics(params?: AnalyticsQueryParams): Promise<ApiResponse<RiskAnalytics>> {
+    return this.get<ApiResponse<RiskAnalytics>>('/analytics/risk', params);
+  }
+
+  async getBillingAnalytics(params?: AnalyticsQueryParams): Promise<ApiResponse<BillingAnalytics>> {
+    return this.get<ApiResponse<BillingAnalytics>>('/analytics/billing/hours', params);
+  }
+
+  // Reports
+  async getReportTemplates(): Promise<ApiResponse<ReportTemplate[]>> {
+    return this.get<ApiResponse<ReportTemplate[]>>('/reports/templates');
+  }
+
+  async getReportHistory(): Promise<ApiResponse<ReportHistory[]>> {
+    return this.get<ApiResponse<ReportHistory[]>>('/reports/history');
+  }
+
+  async generateReport(code: string, params: any): Promise<ApiResponse<any>> {
+    const { engagementId, ...dto } = params;
+
+    // Map template codes to specific endpoints
+    switch (code) {
+      case 'FINANCIAL_SUMMARY':
+      case 'financial-summary':
+        return this.post('/reports/financial-summary', dto);
+      
+      case 'UTILIZATION':
+      case 'utilization':
+        return this.post('/reports/utilization', dto);
+      
+      case 'ENGAGEMENT':
+      case 'engagement':
+        if (!engagementId) throw new Error('Engagement ID is required for this report');
+        return this.post(`/reports/engagement/${engagementId}`, dto);
+        
+      default:
+        // Fallback or throw error if template is unknown
+        throw new Error(`Unknown report template code: ${code}`);
+    }
+  }
+
+  async downloadReport(reportId: string): Promise<Blob> {
+    const response = await this.client.get(`/reports/export/${reportId}`, { 
+      responseType: 'blob' 
+    });
+    return response.data;
+  }
+
+  // Compliance
+  async getAuditTrail(entityType: string, entityId: string): Promise<ApiResponse<AuditLog[]>> {
+    return this.get<ApiResponse<AuditLog[]>>(`/compliance/audit-trail/${entityType}/${entityId}`);
+  }
+
+  async getUserAccessLogs(params: { startDate: string; endDate: string }): Promise<ApiResponse<UserAccessLog[]>> {
+    return this.get<ApiResponse<UserAccessLog[]>>('/compliance/user-access', params);
   }
 
 
