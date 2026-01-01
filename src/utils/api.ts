@@ -28,13 +28,17 @@ ApiResponse,
   ReportTemplate, 
   ReportHistory,
   AuditLog, 
-  UserAccessLog
+  UserAccessLog,
+  
 } from '../types';
 import { BillingAnalytics } from '../types';
 import { ReportTemplate } from '../types';
 import { RiskAnalytics } from '../types';
 import { ReportHistory } from '../types';
 import { UserPerformanceMetric } from '../types';
+import { PBCRequest } from '../types';
+import { UpdatePBCRequestDto } from '../types';
+import { CreatePBCRequestDto } from '../types';
 
 // Placeholder types (replace with actual types from your src/types.ts)
 type Entity = any;
@@ -351,19 +355,44 @@ class ApiClient {
 
   // trial balance endpoints would go here
   // 1. Upload/Import Trial Balance (Uses DataImportController)
-  async importTrialBalance(data: ImportTrialBalancePayload): Promise<ApiResponse<TrialBalance>> {
-    const formData = new FormData();
-    formData.append('file', data.file);
-    formData.append('engagementId', data.engagementId);
-    formData.append('period', data.period);
-    if (data.description) formData.append('description', data.description);
+  // async importTrialBalance(data: ImportTrialBalancePayload): Promise<ApiResponse<TrialBalance>> {
+  //   const formData = new FormData();
+  //   formData.append('file', data.file);
+  //   formData.append('engagementId', data.engagementId);
+  //   formData.append('period', data.period);
+  //   if (data.description) formData.append('description', data.description);
 
-    const response = await this.client.post<ApiResponse<TrialBalance>>('/data-import/trial-balance', formData, {
+  //   const response = await this.client.post<ApiResponse<TrialBalance>>('/data-import/trial-balance', formData, {
+  //     headers: {
+  //       'Content-Type': 'multipart/form-data',
+  //     },
+  //   });
+  //   return response.data;
+  // }
+
+
+  async importTrialBalance(data: { file: File; engagementId: string; period: string; description?: string }): Promise<any> {
+    const formData = new FormData();
+    
+    // 1. Append File
+    formData.append('file', data.file);
+    
+    // 2. Append required DTO fields
+    formData.append('engagementId', data.engagementId);
+    
+    // Ensure Date is sent as ISO String (Backend DTO likely expects @IsDateString)
+    formData.append('period', data.period); 
+    
+    if (data.description) {
+      formData.append('description', data.description);
+    }
+
+    // 3. Send to the CORRECT endpoint (based on your 400 vs 404 logs)
+    return this.post('/data-import/trial-balance', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
     });
-    return response.data;
   }
 
   // 2. Get List of Trial Balances
@@ -534,9 +563,9 @@ class ApiClient {
    * Get metrics on user productivity and task completion.
    * Endpoint: GET /analytics/users/performance
    */
-  async getUserPerformance(params?: AnalyticsDateParams): Promise<ApiResponse<UserPerformanceMetrics[]>> {
-    return this.get<ApiResponse<UserPerformanceMetrics[]>>('/analytics/users/performance', params);
-  }
+  // async getUserPerformance(params?: AnalyticsDateParams): Promise<ApiResponse<UserPerformanceMetrics[]>> {
+  //   return this.get<ApiResponse<UserPerformanceMetrics[]>>('/analytics/users/performance', params);
+  // }
 
   /**
    * Analysis of billable vs. non-billable hours.
@@ -558,23 +587,9 @@ class ApiClient {
    * Get aggregate risk data (heatmap data, high/low counts).
    * Endpoint: GET /analytics/risk
    */
-  async getRiskAnalytics(params?: AnalyticsDateParams): Promise<ApiResponse<RiskAnalytics>> {
-    return this.get<ApiResponse<RiskAnalytics>>('/analytics/risk', params);
-  }
-
-  // --- 2. Dashboard Analytics (Existing) ---
-
-  async getDashboardOverview(): Promise<ApiResponse<DashboardOverview>> {
-    return this.get<ApiResponse<DashboardOverview>>('/dashboard/overview');
-  }
-
-  async getKPIs(params?: { startDate?: string; endDate?: string }): Promise<ApiResponse<KPI[]>> {
-    return this.get<ApiResponse<KPI[]>>('/dashboard/kpis', params);
-  }
-
-  async getWorkloadDistribution(): Promise<ApiResponse<WorkloadDistribution[]>> {
-    return this.get<ApiResponse<WorkloadDistribution[]>>('/dashboard/workload');
-  }
+  // async getRiskAnalytics(params?: AnalyticsDateParams): Promise<ApiResponse<RiskAnalytics>> {
+  //   return this.get<ApiResponse<RiskAnalytics>>('/analytics/risk', params);
+  // }
 
 
   // ... existing methods
@@ -584,9 +599,9 @@ class ApiClient {
   // ------------------------------------------------
 
   // General Analytics
-  async getEngagementAnalytics(params?: AnalyticsQueryParams): Promise<ApiResponse<EngagementAnalytics>> {
-    return this.get<ApiResponse<EngagementAnalytics>>('/analytics/engagements', params);
-  }
+  // async getEngagementAnalytics(params?: AnalyticsQueryParams): Promise<ApiResponse<EngagementAnalytics>> {
+  //   return this.get<ApiResponse<EngagementAnalytics>>('/analytics/engagements', params);
+  // }
 
   async getUserPerformance(params?: AnalyticsQueryParams): Promise<ApiResponse<UserPerformanceMetric[]>> {
     return this.get<ApiResponse<UserPerformanceMetric[]>>('/analytics/users/performance', params);
@@ -596,9 +611,7 @@ class ApiClient {
     return this.get<ApiResponse<RiskAnalytics>>('/analytics/risk', params);
   }
 
-  async getBillingAnalytics(params?: AnalyticsQueryParams): Promise<ApiResponse<BillingAnalytics>> {
-    return this.get<ApiResponse<BillingAnalytics>>('/analytics/billing/hours', params);
-  }
+
 
   // Reports
   async getReportTemplates(): Promise<ApiResponse<ReportTemplate[]>> {
@@ -647,6 +660,61 @@ class ApiClient {
 
   async getUserAccessLogs(params: { startDate: string; endDate: string }): Promise<ApiResponse<UserAccessLog[]>> {
     return this.get<ApiResponse<UserAccessLog[]>>('/compliance/user-access', params);
+  }
+
+  // pbc requests
+
+  // ==========================================
+  // 📋 PBC REQUESTS
+  // ==========================================
+
+  /**
+   * Get all PBC requests for a specific engagement
+   */
+  async getPBCRequests(engagementId: string, status?: PBCStatus): Promise<ApiResponse<PBCRequest[]>> {
+    return this.get<ApiResponse<PBCRequest[]>>(`/engagements/${engagementId}/pbc-requests`, { 
+      params: { status } 
+    });
+  }
+
+  /**
+   * Create a new PBC request
+   */
+  async createPBCRequest(engagementId: string, data: Omit<CreatePBCRequestDto, 'engagementId'>): Promise<ApiResponse<PBCRequest>> {
+    return this.post<ApiResponse<PBCRequest>>(`/engagements/${engagementId}/pbc-requests`, {
+      ...data,
+      engagementId // Ensure ID is passed in body if backend requires it in DTO
+    });
+  }
+
+  /**
+   * Update a PBC request (Status, Assignee)
+   */
+  async updatePBCRequest(engagementId: string, requestId: string, data: UpdatePBCRequestDto): Promise<ApiResponse<PBCRequest>> {
+    return this.patch<ApiResponse<PBCRequest>>(`/engagements/${engagementId}/pbc-requests/${requestId}`, data);
+  }
+
+  /**
+   * Delete a PBC request
+   */
+  async deletePBCRequest(engagementId: string, requestId: string): Promise<ApiResponse<void>> {
+    return this.delete(`/engagements/${engagementId}/pbc-requests/${requestId}`);
+  }
+
+  /**
+   * Upload a file to a PBC request (Client or Auditor side)
+   */
+  async uploadPBCFile(engagementId: string, requestId: string, file: File): Promise<ApiResponse<PBCRequest>> {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    return this.post<ApiResponse<PBCRequest>>(
+      `/engagements/${engagementId}/pbc-requests/${requestId}/upload`, 
+      formData, 
+      {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      }
+    );
   }
 
 

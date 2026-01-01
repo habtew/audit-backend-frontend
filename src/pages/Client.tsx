@@ -165,7 +165,7 @@ const Clients: React.FC = () => {
 
   const openAddModal = () => {
     setEditingClient(null);
-    reset({ name: '', email: '', phone: '', industry: '', address: '', isActive: true });
+    reset({ name: '', email: '', phone: '', industry: '', address: ''});
     setIsModalOpen(true);
   };
 

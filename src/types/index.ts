@@ -515,3 +515,170 @@ export interface UserAccessLog {
   lastLogin: string;
   status: 'ACTIVE' | 'INACTIVE';
 }
+
+
+// billing types
+// src/types/billing.ts
+
+export enum InvoiceStatus {
+  DRAFT = 'DRAFT',
+  SENT = 'SENT',
+  PAID = 'PAID',
+  OVERDUE = 'OVERDUE',
+  CANCELLED = 'CANCELLED'
+}
+
+export enum BillableHourStatus {
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+  INVOICED = 'INVOICED'
+}
+
+export interface InvoiceItem {
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  amount: number;
+}
+
+export interface Invoice {
+  id: string;
+  invoiceNumber: string;
+  engagementId: string;
+  clientId: string;
+  amount: number;
+  status: InvoiceStatus;
+  issueDate: string;
+  dueDate: string;
+  items: InvoiceItem[];
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  client?: {
+    name: string;
+    email: string;
+  };
+  engagement?: {
+    title: string;
+  };
+}
+
+export interface BillableHour {
+  id: string;
+  userId: string;
+  engagementId: string;
+  hours: number;
+  rate: number;
+  amount: number;
+  description: string;
+  date: string;
+  status: BillableHourStatus;
+  isBillable: boolean;
+  createdAt: string;
+  user?: {
+    firstName: string;
+    lastName: string;
+  };
+  engagement?: {
+    title: string;
+    client: {
+      name: string;
+    };
+  };
+}
+
+// --- DTOs ---
+
+export interface CreateInvoiceDto {
+  engagementId: string;
+  items: Omit<InvoiceItem, 'amount'>[]; // Amount is usually calculated backend, but structure depends on logic
+  dueDate: string;
+  notes?: string;
+}
+
+export interface UpdateInvoiceDto {
+  status?: InvoiceStatus;
+  items?: InvoiceItem[];
+  notes?: string;
+  dueDate?: string;
+}
+
+export interface QueryInvoicesDto {
+  page?: number;
+  limit?: number;
+  clientId?: string;
+  status?: InvoiceStatus;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface CreateTimeEntryDto {
+  engagementId: string;
+  hours: number;
+  description: string;
+  date: string;
+  isBillable?: boolean;
+}
+
+export interface BulkTimeEntryDto {
+  entries: CreateTimeEntryDto[];
+}
+
+export interface QueryBillableHoursDto {
+  page?: number;
+  limit?: number;
+  userId?: string;
+  engagementId?: string;
+  startDate?: string;
+  endDate?: string;
+  status?: BillableHourStatus;
+}
+
+// pbc
+// src/types/pbc.ts
+
+export enum PBCStatus {
+  OPEN = 'OPEN',
+  SUBMITTED = 'SUBMITTED',
+  REVIEWED = 'REVIEWED',
+  RETURNED = 'RETURNED'
+}
+
+export interface PBCRequest {
+  id: string;
+  engagementId: string;
+  title: string;
+  description?: string;
+  dueDate: string;
+  status: PBCStatus;
+  assigneeId?: string;
+  files: Array<{ 
+    id: string; 
+    url: string; 
+    originalName: string; 
+    uploadedAt: string 
+  }>;
+  createdAt: string;
+  updatedAt: string;
+  assignee?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+  };
+}
+
+export interface CreatePBCRequestDto {
+  engagementId: string;
+  title: string;
+  description?: string;
+  dueDate: string;
+  assigneeId?: string;
+}
+
+export interface UpdatePBCRequestDto {
+  status?: PBCStatus;
+  assigneeId?: string;
+  comments?: string;
+}

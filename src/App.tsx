@@ -141,6 +141,8 @@ import TrialBalanceDetail from './pages/TrialBalance/TrialBalanceDetail';
 import InvoicesList from './pages/Billing/InvoicesList';
 import InvoiceDetail from './pages/Billing/InvoiceDetail';
 import AnalyticsDashboard from './pages/Analytics/AnalyticsDashboard';
+import BillingDashboard from './pages/Billing/BillingDashboard';
+import EngagementDetail from './pages/EngagementDetail';
 
 import LoadingSpinner from './components/Common/LoadingSpinner';
 import ErrorBoundary from './components/Common/ErrorBoundary';
@@ -222,6 +224,7 @@ function App() {
                 <Route path="users" element={<Users />} />
                 <Route path="clients" element={<Clients />} />
                 <Route path="engagements" element={<Engagements />} />
+                <Route path="engagements/:id" element={<EngagementDetail />} />
                 <Route path="risk-assessments" element={<RiskAssessments />} />
                 <Route path="entities" element={<Entities />} />
                 <Route path="workpapers" element={<Workpapers />} />
@@ -239,7 +242,7 @@ function App() {
                 <Route path="analytics" element={<AnalyticsDashboard />} />
                 <Route path="reports" element={<PlaceholderPage title="Reports" />} />
                 <Route path="compliance" element={<PlaceholderPage title="Compliance" />} />
-                <Route path="billing" element={<PlaceholderPage title="Billing Dashboard" />} />
+                <Route path="billing" element={<BillingDashboard />} />
                 <Route path="settings" element={<PlaceholderPage title="Settings" />} />
               </Route>
             </Routes>
