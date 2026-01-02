@@ -1,36 +1,43 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Dialog } from '@headlessui/react';
+import { XMarkIcon } from '@heroicons/react/24/outline';
 import { apiClient } from '../../utils/api';
 import { TrialBalance, ComparisonResult } from '../../types';
+import toast from 'react-hot-toast';
 import LoadingSpinner from '../../components/Common/LoadingSpinner';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  currentTb: TrialBalance;
+  currentTb: TrialBalance | null;
 }
 
 const CompareTrialBalanceModal: React.FC<Props> = ({ isOpen, onClose, currentTb }) => {
   const [others, setOthers] = useState<TrialBalance[]>([]);
   const [selectedId, setSelectedId] = useState<string>('');
-  const [comparison, setComparison] = useState<ComparisonResult[]>([]);
+  const [results, setResults] = useState<ComparisonResult[] | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Fetch other TBs for this engagement
   useEffect(() => {
-    if (isOpen) {
-      // Fetch other TBs for this engagement to compare against
-      apiClient.getTrialBalances({ engagementId: currentTb.engagementId }).then(res => {
-        setOthers(res.data.trialBalances.filter(t => t.id !== currentTb.id));
-      });
+    if (isOpen && currentTb?.engagementId) {
+      apiClient.getTrialBalances({ engagementId: currentTb.engagementId })
+        .then(res => {
+          // Filter out current TB
+          setOthers((res.data.trialBalances || []).filter(tb => tb.id !== currentTb.id));
+        })
+        .catch(() => toast.error('Failed to load other versions'));
     }
   }, [isOpen, currentTb]);
 
   const handleCompare = async () => {
-    if (!selectedId) return;
-    setLoading(true);
+    if (!currentTb || !selectedId) return;
     try {
+      setLoading(true);
       const res = await apiClient.compareTrialBalances(currentTb.id, selectedId);
-      setComparison(res.data);
+      setResults(res.data);
+    } catch (e) {
+      toast.error('Comparison failed');
     } finally {
       setLoading(false);
     }
@@ -38,68 +45,65 @@ const CompareTrialBalanceModal: React.FC<Props> = ({ isOpen, onClose, currentTb 
 
   return (
     <Dialog open={isOpen} onClose={onClose} className="relative z-50">
-      <div className="fixed inset-0 bg-black/30" />
+      <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
       <div className="fixed inset-0 flex items-center justify-center p-4">
-        <Dialog.Panel className="w-full max-w-4xl bg-white rounded-2xl p-6 shadow-xl h-[80vh] flex flex-col">
+        <Dialog.Panel className="w-full max-w-3xl bg-white rounded-2xl p-6 shadow-xl max-h-[90vh] overflow-y-auto">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-xl font-bold">Compare Trial Balances</h3>
-            <button onClick={onClose} className="text-gray-500">Close</button>
+            <Dialog.Title className="text-lg font-bold">Compare Trial Balances</Dialog.Title>
+            <button onClick={onClose}><XMarkIcon className="h-6 w-6 text-gray-500" /></button>
           </div>
 
-          <div className="flex gap-4 mb-4 items-end">
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700">Compare Current ({new Date(currentTb.period).toLocaleDateString()}) vs:</label>
-              <select 
-                className="mt-1 block w-full border border-gray-300 rounded-md p-2"
-                value={selectedId}
-                onChange={(e) => setSelectedId(e.target.value)}
-              >
-                <option value="">Select a period...</option>
-                {others.map(t => (
-                  <option key={t.id} value={t.id}>{new Date(t.period).toLocaleDateString()} - {t.description}</option>
-                ))}
-              </select>
-            </div>
-            <button 
-              onClick={handleCompare}
-              disabled={!selectedId || loading}
-              className="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 disabled:bg-gray-300"
-            >
-              Run Comparison
-            </button>
+          <div className="flex gap-4 mb-6 items-end">
+             <div className="flex-1">
+               <label className="block text-sm font-medium mb-1">Compare against:</label>
+               <select 
+                 className="w-full border p-2 rounded" 
+                 value={selectedId} 
+                 onChange={(e) => setSelectedId(e.target.value)}
+               >
+                 <option value="">Select a version...</option>
+                 {others.map(tb => (
+                    <option key={tb.id} value={tb.id}>
+                        v{tb.version} - {new Date(tb.period).toLocaleDateString()}
+                    </option>
+                 ))}
+               </select>
+             </div>
+             <button 
+               onClick={handleCompare} 
+               disabled={!selectedId || loading}
+               className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+             >
+               {loading ? 'Comparing...' : 'Run Comparison'}
+             </button>
           </div>
 
-          <div className="flex-1 overflow-auto border rounded-lg">
-            {loading ? <LoadingSpinner /> : (
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50 sticky top-0">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Account</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Current</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Previous</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Variance</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">% Change</th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {comparison.map((row) => (
-                    <tr key={row.accountId}>
-                      <td className="px-4 py-2 text-sm text-gray-900">{row.accountName}</td>
-                      <td className="px-4 py-2 text-sm text-right">{row.currentAmount.toLocaleString()}</td>
-                      <td className="px-4 py-2 text-sm text-right">{row.previousAmount.toLocaleString()}</td>
-                      <td className={`px-4 py-2 text-sm text-right font-bold ${row.variance < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        {row.variance.toLocaleString()}
-                      </td>
-                      <td className="px-4 py-2 text-sm text-right">{row.percentageChange.toFixed(1)}%</td>
-                    </tr>
-                  ))}
-                  {comparison.length === 0 && !loading && (
-                    <tr><td colSpan={5} className="text-center py-8 text-gray-500">Select a period to compare</td></tr>
-                  )}
-                </tbody>
-              </table>
-            )}
-          </div>
+          {results && (
+             <table className="min-w-full divide-y divide-gray-200">
+               <thead className="bg-gray-50">
+                 <tr>
+                   <th className="px-4 py-2 text-left text-xs uppercase">Account</th>
+                   <th className="px-4 py-2 text-right text-xs uppercase">Current</th>
+                   <th className="px-4 py-2 text-right text-xs uppercase">Previous</th>
+                   <th className="px-4 py-2 text-right text-xs uppercase">Variance</th>
+                   <th className="px-4 py-2 text-right text-xs uppercase">%</th>
+                 </tr>
+               </thead>
+               <tbody>
+                 {results.map((r) => (
+                   <tr key={r.accountNumber} className="border-b">
+                     <td className="px-4 py-2 text-sm">{r.accountName}</td>
+                     <td className="px-4 py-2 text-sm text-right">{r.currentBalance.toLocaleString()}</td>
+                     <td className="px-4 py-2 text-sm text-right">{r.previousBalance.toLocaleString()}</td>
+                     <td className={`px-4 py-2 text-sm text-right ${r.variance < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        {r.variance.toLocaleString()}
+                     </td>
+                     <td className="px-4 py-2 text-sm text-right">{r.variancePercentage.toFixed(1)}%</td>
+                   </tr>
+                 ))}
+               </tbody>
+             </table>
+          )}
         </Dialog.Panel>
       </div>
     </Dialog>

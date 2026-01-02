@@ -1,5 +1,6 @@
 // src/types/index.ts
 
+// --- Generic API Response ---
 export interface ApiResponse<T> {
   data: T;
   message: string;
@@ -7,36 +8,14 @@ export interface ApiResponse<T> {
   path: string;
 }
 
+export interface SuccessResponse { 
+  message: string | { success: boolean };
+}
+
+// --- Auth Types ---
 export interface LoginSuccessData {
   access_token: string;
   user: User;
-}
-
-export interface User {
-  id: string;
-  firstName?: string;
-  lastName?: string;
-  name?: string; // Optional fallback
-  email: string;
-  role?: string;
-  isActive?: boolean; // Matches backend boolean
-  status?: string;    // Deprecated string status (optional)
-  createdAt?: string;
-  updatedAt?: string;
-  password?: string;
-}
-
-export interface Document {
-  id: string;
-  name: string;
-  filePath: string;
-  fileSize: number;
-  mimeType: string;
-  createdAt: string;
-  uploader?: {
-    firstName: string;
-    lastName: string;
-  };
 }
 
 export interface LoginCredentials {
@@ -49,6 +28,34 @@ export interface RegisterData {
   email: string;
   password: string;
   role?: string;
+}
+
+export interface User {
+  id: string;
+  firstName?: string;
+  lastName?: string;
+  name?: string; // Fallback
+  email: string;
+  role?: string;
+  isActive?: boolean;
+  status?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  password?: string;
+}
+
+// --- Common Types ---
+export interface Document {
+  id: string;
+  name: string;
+  filePath: string;
+  fileSize: number;
+  mimeType: string;
+  createdAt: string;
+  uploader?: {
+    firstName: string;
+    lastName: string;
+  };
 }
 
 // --- Dashboard Types ---
@@ -91,13 +98,12 @@ export interface DashboardWorkload {
   hoursThisWeek: number;
 }
 
-// --- Client Types ---
-
+// --- Client & Entity Types ---
 export interface Client {
   id: string;
-  name: string; // Company Name
+  name: string;
   contactPerson?: string;
-  company?: string; // Optional fallback
+  company?: string;
   email?: string;
   phone?: string;
   address?: string;
@@ -108,8 +114,6 @@ export interface Client {
   createdAt?: string;
   updatedAt?: string;
 }
-
-// --- Entity Types ---
 
 export interface Entity {
   id: string;
@@ -123,8 +127,7 @@ export interface Entity {
   updatedAt?: string;
 }
 
-// --- Engagement Types (UPDATED) ---
-
+// --- Engagement Types ---
 export interface Engagement {
   id: string;
   name: string;
@@ -161,7 +164,7 @@ export interface AssignUserDto {
 }
 
 export interface EngagementTeamUser {
-  id: string; // Assignment ID
+  id: string;
   engagementId: string;
   userId: string;
   role: string;
@@ -176,7 +179,6 @@ export interface EngagementTeamUser {
 }
 
 // --- Workpaper Types ---
-
 export interface Workpaper {
   id: string;
   engagementId: string;
@@ -190,9 +192,8 @@ export interface Workpaper {
   reviewedAt?: string;
   createdAt?: string;
   updatedAt?: string;
-  // Relations
   engagement?: Engagement;
-  documents?: Document[]; // Array of documents
+  documents?: Document[];
   _count?: {
     documents: number;
   };
@@ -206,14 +207,10 @@ export interface WorkpaperTemplate {
 }
 
 // --- Risk Assessment Types ---
-// ... existing types ...
-
-// --- Risk Assessment Types (Updated) ---
-
 export interface RiskAssessment {
   id: string;
   engagementId: string;
-  category: string;       // e.g. "REVENUE", "ASSETS"
+  category: string;
   riskDescription: string;
   riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   likelihood: 'LOW' | 'MEDIUM' | 'HIGH';
@@ -224,7 +221,6 @@ export interface RiskAssessment {
   isActive?: boolean;
   createdAt?: string;
   updatedAt?: string;
-  // Relations
   engagement?: {
     id?: string;
     name: string;
@@ -269,23 +265,32 @@ export interface RiskReport {
   generatedBy: string;
 }
 
-// trial balancce
+export interface TrialBalanceSummaryData {
+  totalAccounts: number;
+  totalDebits: number | string;
+  totalCredits: number | string;
+  isBalanced: boolean;
+  accountTypes: Record<string, number>;
+}
 
 export interface TrialBalance {
   id: string;
   engagementId: string;
-  period: string; // ISO Date
+  period: string; // ISO String
+  version: number;
   description?: string;
-  status: 'DRAFT' | 'IMPORTED' | 'MAPPED' | 'REVIEWED' | 'FINAL';
-  totalDebit: number;
-  totalCredit: number;
+  totalDebits: string | number;  // API returns string "0"
+  totalCredits: string | number; // API returns string "0"
+  isBalanced: boolean;
+  isActive: boolean;
   createdAt: string;
   updatedAt: string;
   engagement?: {
     name: string;
-    client: { name: string };
+    client?: { name: string };
   };
   accounts?: TrialBalanceAccount[];
+  mappings?: any[]; // Placeholder for mappings
   _count?: {
     accounts: number;
   };
@@ -293,6 +298,7 @@ export interface TrialBalance {
 
 export interface TrialBalanceAccount {
   id: string;
+  trialBalanceId: string;
   accountNumber: string;
   accountName: string;
   debitAmount: number;
@@ -301,14 +307,23 @@ export interface TrialBalanceAccount {
   category?: string;
   subCategory?: string;
   isMapped: boolean;
-  mappings?: any[]; // Define specific mapping type if needed
+  mappings?: any[];
 }
 
-export interface ImportTrialBalancePayload {
-  file: File;
-  engagementId: string;
-  period: string;
-  description?: string;
+export interface AdjustmentPayload {
+  description: string;
+  amount: number;
+  type: 'DEBIT' | 'CREDIT';
+  adjustmentType?: 'CORRECTION' | 'RECLASSIFICATION' | 'PROPOSED';
+}
+
+export interface ComparisonResult {
+  accountNumber: string;
+  accountName: string;
+  currentBalance: number;
+  previousBalance: number;
+  variance: number;
+  variancePercentage: number;
 }
 
 export interface UpdateAccountPayload {
@@ -318,30 +333,48 @@ export interface UpdateAccountPayload {
   note?: string;
 }
 
+// --- Billing Types ---
+export enum InvoiceStatus {
+  DRAFT = 'DRAFT',
+  SENT = 'SENT',
+  PAID = 'PAID',
+  OVERDUE = 'OVERDUE',
+  CANCELLED = 'CANCELLED'
+}
 
-// inovice types
+export enum BillableHourStatus {
+  PENDING = 'PENDING',
+  APPROVED = 'APPROVED',
+  REJECTED = 'REJECTED',
+  INVOICED = 'INVOICED'
+}
+
 export interface InvoiceItem {
   description: string;
   quantity: number;
-  rate: number;
+  rate?: number;
+  unitPrice?: number; // Consolidating rate/unitPrice
   amount: number;
 }
 
 export interface Invoice {
   id: string;
   invoiceNumber: string;
-  clientId: string;
   engagementId?: string;
+  clientId: string;
   issueDate: string;
   dueDate: string;
-  status: 'DRAFT' | 'SENT' | 'PAID' | 'OVERDUE' | 'CANCELLED';
-  subtotal: number;
-  taxAmount: number;
-  totalAmount: number;
+  status: InvoiceStatus;
+  subtotal?: number;
+  taxAmount?: number;
+  totalAmount?: number; // Consolidating amount/totalAmount
+  amount?: number;      
   items: InvoiceItem[];
+  notes?: string;
   client?: { name: string; email: string };
-  engagement?: { name: string };
+  engagement?: { name: string; title?: string };
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface BillableHour {
@@ -354,9 +387,11 @@ export interface BillableHour {
   hours: number;
   rate: number;
   amount: number;
-  isBilled: boolean;
-  user?: { name: string };
-  engagement?: { name: string; client: { name: string } };
+  status: BillableHourStatus;
+  isBilled?: boolean; // Can derive from status === INVOICED
+  isBillable?: boolean;
+  user?: { name?: string; firstName?: string; lastName?: string };
+  engagement?: { name: string; title?: string; client: { name: string } };
 }
 
 export interface CreateInvoicePayload {
@@ -365,24 +400,20 @@ export interface CreateInvoicePayload {
   issueDate: string;
   dueDate: string;
   items: Array<{ description: string; quantity: number; rate: number }>;
+  notes?: string;
 }
 
-export interface GenerateInvoicePayload {
-  engagementId: string;
-  issueDate: string;
-  dueDate: string;
-}
+export interface CreateInvoiceDto extends CreateInvoicePayload {} 
 
 export interface CreateTimeEntryPayload {
   engagementId: string;
   description: string;
   date: string;
   hours: number;
+  isBillable?: boolean;
 }
 
-
-// --- Core Analytics Types ---
-
+// --- Analytics Types ---
 export interface AnalyticsDateParams {
   startDate?: string;
   endDate?: string;
@@ -391,29 +422,32 @@ export interface AnalyticsDateParams {
 }
 
 export interface EngagementAnalytics {
-  totalEngagements: number;
-  completedEngagements: number;
-  activeEngagements: number;
+  total: number;
+  active: number;
+  completed: number;
+  byStatus: Record<string, number>;
+  byType: Record<string, number>;
   averageDurationDays: number;
-  statusDistribution: Record<string, number>;
-  engagementsOverTime: Array<{ date: string; count: number }>;
+  engagementsOverTime?: Array<{ date: string; count: number }>; // Merged
 }
 
-export interface UserPerformanceMetrics {
+export interface UserPerformanceMetric {
   userId: string;
   userName: string;
-  tasksCompleted: number;
-  tasksOverdue: number;
-  averageCompletionTimeHours: number;
-  efficiencyScore: number; // e.g., 0-100
+  assignedEngagements: number;
+  completedWorkpapers: number;
+  billableHours: number;
+  tasksCompleted?: number;
+  efficiencyScore?: number;
 }
 
 export interface BillingAnalytics {
-  totalBillableHours: number;
-  totalNonBillableHours: number;
-  billableAmount: number;
-  utilizationRate: number; // percentage
-  breakdownByEngagement: Array<{ engagementName: string; hours: number; amount: number }>;
+  totalHours: number;
+  billableHours: number;
+  nonBillableHours: number;
+  utilizationRate: number;
+  revenueByClient: Array<{ clientName: string; amount: number }>;
+  breakdownByEngagement?: Array<{ engagementName: string; hours: number; amount: number }>;
 }
 
 export interface EngagementProgress {
@@ -428,35 +462,6 @@ export interface EngagementProgress {
 
 export interface RiskAnalytics {
   totalRisks: number;
-  highRisks: number;
-  mediumRisks: number;
-  lowRisks: number;
-  riskHeatmapData: Array<{ impact: string; likelihood: string; count: number }>;
-  topRiskAreas: Array<{ category: string; count: number }>;
-}
-
-
-// --- Analytics & Reporting Types ---
-
-export interface EngagementAnalytics {
-  total: number;
-  active: number;
-  completed: number;
-  byStatus: Record<string, number>;
-  byType: Record<string, number>;
-  averageDurationDays: number;
-}
-
-export interface UserPerformanceMetric {
-  userId: string;
-  userName: string;
-  assignedEngagements: number;
-  completedWorkpapers: number;
-  billableHours: number;
-}
-
-export interface RiskAnalytics {
-  totalRisks: number;
   byLevel: {
     LOW: number;
     MEDIUM: number;
@@ -467,17 +472,10 @@ export interface RiskAnalytics {
     id: string;
     title: string;
     level: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-    likelihood: number;
-    impact: number;
+    likelihood: number | string;
+    impact: number | string;
   }>;
-}
-
-export interface BillingAnalytics {
-  totalHours: number;
-  billableHours: number;
-  nonBillableHours: number;
-  utilizationRate: number;
-  revenueByClient: Array<{ clientName: string; amount: number }>;
+  riskHeatmapData?: Array<{ impact: string; likelihood: string; count: number }>;
 }
 
 export interface ReportTemplate {
@@ -485,7 +483,7 @@ export interface ReportTemplate {
   code: string;
   name: string;
   description: string;
-  supportedFormats: string[]; // e.g. ['PDF', 'EXCEL']
+  supportedFormats: string[];
 }
 
 export interface ReportHistory {
@@ -497,6 +495,7 @@ export interface ReportHistory {
   downloadUrl?: string;
 }
 
+// --- Compliance ---
 export interface AuditLog {
   id: string;
   action: string;
@@ -516,128 +515,7 @@ export interface UserAccessLog {
   status: 'ACTIVE' | 'INACTIVE';
 }
 
-
-// billing types
-// src/types/billing.ts
-
-export enum InvoiceStatus {
-  DRAFT = 'DRAFT',
-  SENT = 'SENT',
-  PAID = 'PAID',
-  OVERDUE = 'OVERDUE',
-  CANCELLED = 'CANCELLED'
-}
-
-export enum BillableHourStatus {
-  PENDING = 'PENDING',
-  APPROVED = 'APPROVED',
-  REJECTED = 'REJECTED',
-  INVOICED = 'INVOICED'
-}
-
-export interface InvoiceItem {
-  description: string;
-  quantity: number;
-  unitPrice: number;
-  amount: number;
-}
-
-export interface Invoice {
-  id: string;
-  invoiceNumber: string;
-  engagementId: string;
-  clientId: string;
-  amount: number;
-  status: InvoiceStatus;
-  issueDate: string;
-  dueDate: string;
-  items: InvoiceItem[];
-  notes?: string;
-  createdAt: string;
-  updatedAt: string;
-  client?: {
-    name: string;
-    email: string;
-  };
-  engagement?: {
-    title: string;
-  };
-}
-
-export interface BillableHour {
-  id: string;
-  userId: string;
-  engagementId: string;
-  hours: number;
-  rate: number;
-  amount: number;
-  description: string;
-  date: string;
-  status: BillableHourStatus;
-  isBillable: boolean;
-  createdAt: string;
-  user?: {
-    firstName: string;
-    lastName: string;
-  };
-  engagement?: {
-    title: string;
-    client: {
-      name: string;
-    };
-  };
-}
-
-// --- DTOs ---
-
-export interface CreateInvoiceDto {
-  engagementId: string;
-  items: Omit<InvoiceItem, 'amount'>[]; // Amount is usually calculated backend, but structure depends on logic
-  dueDate: string;
-  notes?: string;
-}
-
-export interface UpdateInvoiceDto {
-  status?: InvoiceStatus;
-  items?: InvoiceItem[];
-  notes?: string;
-  dueDate?: string;
-}
-
-export interface QueryInvoicesDto {
-  page?: number;
-  limit?: number;
-  clientId?: string;
-  status?: InvoiceStatus;
-  startDate?: string;
-  endDate?: string;
-}
-
-export interface CreateTimeEntryDto {
-  engagementId: string;
-  hours: number;
-  description: string;
-  date: string;
-  isBillable?: boolean;
-}
-
-export interface BulkTimeEntryDto {
-  entries: CreateTimeEntryDto[];
-}
-
-export interface QueryBillableHoursDto {
-  page?: number;
-  limit?: number;
-  userId?: string;
-  engagementId?: string;
-  startDate?: string;
-  endDate?: string;
-  status?: BillableHourStatus;
-}
-
-// pbc
-// src/types/pbc.ts
-
+// --- PBC Requests ---
 export enum PBCStatus {
   OPEN = 'OPEN',
   SUBMITTED = 'SUBMITTED',
