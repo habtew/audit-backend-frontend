@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import OverviewTab from './tabs/OverviewTab';
-import ReportsTab from './tabs/ReportsTab';
+import ReportsTab from '../Reports/ReportsTab';
 import ComplianceTab from './tabs/ComplianceTab';
 
 const AnalyticsDashboard: React.FC = () => {
@@ -36,18 +36,7 @@ const AnalyticsDashboard: React.FC = () => {
                 >
                   Overview & Metrics
                 </button>
-                <button
-                  onClick={() => setActiveTab('reports')}
-                  className={`${activeTab === 'reports' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-                >
-                  Reports
-                </button>
-                <button
-                  onClick={() => setActiveTab('compliance')}
-                  className={`${activeTab === 'compliance' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
-                >
-                  Compliance
-                </button>
+                
               </nav>
             </div>
           </div>
@@ -56,8 +45,6 @@ const AnalyticsDashboard: React.FC = () => {
         {/* Tab Content */}
         <div className="mt-4">
           {activeTab === 'overview' && <OverviewTab />}
-          {activeTab === 'reports' && <ReportsTab />}
-          {activeTab === 'compliance' && <ComplianceTab />}
         </div>
       </div>
     </div>

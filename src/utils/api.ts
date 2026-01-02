@@ -378,32 +378,47 @@ class ApiClient {
   }
 
   // 💰 Billing: Invoices
-  async getInvoices(params?: { status?: string; clientId?: string }): Promise<ApiResponse<Invoice[]>> {
-    return this.get<ApiResponse<Invoice[]>>('/invoices', params);
+async getInvoices(params?: { page?: number; limit?: number; status?: string; clientId?: string }): Promise<ApiResponse<{ invoices: Invoice[]; pagination: any }>> {
+    return this.get<ApiResponse<{ invoices: Invoice[]; pagination: any }>>('/invoices', params);
   }
+
   async getInvoiceById(id: string): Promise<ApiResponse<Invoice>> {
     return this.get<ApiResponse<Invoice>>(`/invoices/${id}`);
   }
+
   async createInvoice(data: CreateInvoicePayload): Promise<ApiResponse<Invoice>> {
     return this.post<ApiResponse<Invoice>>('/invoices', data);
   }
+
   async generateInvoice(engagementId: string): Promise<ApiResponse<Invoice>> {
+    // This calls the endpoint to create invoice from unbilled hours
     return this.post<ApiResponse<Invoice>>(`/invoices/generate/${engagementId}`);
   }
-  async updateInvoice(id: string, data: Partial<CreateInvoicePayload>): Promise<ApiResponse<Invoice>> {
+
+  async updateInvoice(id: string, data: any): Promise<ApiResponse<Invoice>> {
     return this.put<ApiResponse<Invoice>>(`/invoices/${id}`, data);
   }
+
   async markInvoicePaid(id: string): Promise<ApiResponse<Invoice>> {
     return this.put<ApiResponse<Invoice>>(`/invoices/${id}/pay`, {});
   }
-  async sendInvoice(id: string): Promise<ApiResponse<void>> {
-    return this.post<ApiResponse<void>>(`/invoices/${id}/send`, {});
+
+  async sendInvoice(id: string): Promise<ApiResponse<{ message: string; sentTo: string }>> {
+    return this.post<ApiResponse<{ message: string; sentTo: string }>>(`/invoices/${id}/send`, {});
   }
+
   async deleteInvoice(id: string): Promise<ApiResponse<void>> {
     return this.delete<ApiResponse<void>>(`/invoices/${id}`);
   }
-  async getInvoicePreview(id: string): Promise<Blob> {
-    const response = await this.client.get(`/invoices/${id}/preview`, { responseType: 'blob' });
+
+  // Returns metadata + previewUrl
+  async getInvoicePreviewData(id: string): Promise<ApiResponse<{ invoice: Invoice; previewUrl: string }>> {
+    return this.get<ApiResponse<{ invoice: Invoice; previewUrl: string }>>(`/invoices/${id}/preview`);
+  }
+
+  // Downloads the actual PDF
+  async downloadInvoicePdf(id: string): Promise<Blob> {
+    const response = await this.client.get(`/invoices/${id}/pdf`, { responseType: 'blob' });
     return response.data;
   }
 
@@ -414,8 +429,28 @@ class ApiClient {
   async createTimeEntry(data: CreateTimeEntryPayload): Promise<ApiResponse<BillableHour>> {
     return this.post<ApiResponse<BillableHour>>('/billable-hours', data);
   }
-  async getUnbilledSummary(engagementId: string): Promise<ApiResponse<{ totalHours: number; totalAmount: number; count: number }>> {
-    return this.get(`/billable-hours/summary/engagement/${engagementId}`);
+  async getUnbilledSummary(engagementId: string): Promise<ApiResponse<{ 
+    totalHours: number; 
+    unbilledAmount: number; 
+    totalBillableAmount: number; 
+  }>> {
+    // We use the billing/summary path which you confirmed works without dates
+    const res = await this.get<ApiResponse<any>>('/billing/summary', { engagementId });
+    
+    // The working API returns the summary object inside data
+    return {
+      ...res,
+      data: res.data.summary 
+    };
+  }
+
+  async getBillingSummary(params?: { 
+    engagementId?: string; 
+    userId?: string; 
+    startDate?: string; 
+    endDate?: string; 
+  }): Promise<ApiResponse<any>> {
+    return this.get('/billing/summary', params);
   }
 
   // 📊 Analytics

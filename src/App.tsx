@@ -143,6 +143,8 @@ import InvoiceDetail from './pages/Billing/InvoiceDetail';
 import AnalyticsDashboard from './pages/Analytics/AnalyticsDashboard';
 import BillingDashboard from './pages/Billing/BillingDashboard';
 import EngagementDetail from './pages/EngagementDetail';
+import ReportsTab from './pages/Reports/ReportsTab';
+import ComplianceTab from './pages/Analytics/tabs/ComplianceTab';
 
 import LoadingSpinner from './components/Common/LoadingSpinner';
 import ErrorBoundary from './components/Common/ErrorBoundary';
@@ -240,8 +242,8 @@ function App() {
                 
                 {/* Placeholders for remaining modules */}
                 <Route path="analytics" element={<AnalyticsDashboard />} />
-                <Route path="reports" element={<PlaceholderPage title="Reports" />} />
-                <Route path="compliance" element={<PlaceholderPage title="Compliance" />} />
+                <Route path="reports" element={<ReportsTab />} />
+                <Route path="compliance" element={<ComplianceTab />} />
                 <Route path="billing" element={<BillingDashboard />} />
                 <Route path="settings" element={<PlaceholderPage title="Settings" />} />
               </Route>

@@ -342,39 +342,63 @@ export enum InvoiceStatus {
   CANCELLED = 'CANCELLED'
 }
 
-export enum BillableHourStatus {
-  PENDING = 'PENDING',
-  APPROVED = 'APPROVED',
-  REJECTED = 'REJECTED',
-  INVOICED = 'INVOICED'
-}
-
 export interface InvoiceItem {
+  id?: string;
+  invoiceId?: string;
   description: string;
   quantity: number;
-  rate?: number;
-  unitPrice?: number; // Consolidating rate/unitPrice
-  amount: number;
+  rate: number | string;
+  amount: number | string;
 }
 
 export interface Invoice {
   id: string;
-  invoiceNumber: string;
-  engagementId?: string;
   clientId: string;
+  invoiceNumber: string;
   issueDate: string;
   dueDate: string;
-  status: InvoiceStatus;
-  subtotal?: number;
-  taxAmount?: number;
-  totalAmount?: number; // Consolidating amount/totalAmount
-  amount?: number;      
-  items: InvoiceItem[];
+  status: InvoiceStatus | string;
+  
+  // API returns strings for amounts
+  subtotal: string | number;
+  tax: string | number;      // Changed from taxAmount
+  total: string | number;    // Changed from totalAmount
+  
+  paidAt?: string | null;
   notes?: string;
-  client?: { name: string; email: string };
-  engagement?: { name: string; title?: string };
+  isActive?: boolean;
   createdAt: string;
-  updatedAt?: string;
+  updatedAt: string;
+  
+  // API uses invoiceItems instead of items
+  invoiceItems: InvoiceItem[];
+  
+  client?: {
+    id: string;
+    name: string;
+    email?: string;
+    address?: string;
+  };
+  engagement?: {
+    id: string;
+    name: string;
+    title?: string;
+  };
+}
+
+export interface CreateInvoicePayload {
+  clientId: string;
+  engagementId?: string;
+  issueDate: string;
+  dueDate: string;
+  notes?: string;
+  taxRate?: number;
+  items: Array<{
+    description: string;
+    quantity: number;
+    rate: number;
+    amount: number;
+  }>;
 }
 
 export interface BillableHour {
@@ -393,6 +417,8 @@ export interface BillableHour {
   user?: { name?: string; firstName?: string; lastName?: string };
   engagement?: { name: string; title?: string; client: { name: string } };
 }
+
+export enum BillableHourStatus { PENDING = 'PENDING', APPROVED = 'APPROVED', REJECTED = 'REJECTED', INVOICED = 'INVOICED' }
 
 export interface CreateInvoicePayload {
   clientId: string;
