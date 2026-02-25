@@ -178,9 +178,14 @@ class ApiClient {
   }
 
   // 🧑‍💼 Clients
-  async getClients(params?: any): Promise<ApiResponse<Client[]>> {
-    return this.get<ApiResponse<Client[]>>('/clients', params);
-  }
+  async getClients(params?: any): Promise<ApiResponse<ClientResponse>> {
+  return this.get<ApiResponse<ClientResponse>>('/clients', params);
+}
+
+// Change return type to UserResponse
+async getUsers(params?: any): Promise<ApiResponse<UserResponse>> {
+  return this.get<ApiResponse<UserResponse>>('/users', params);
+}
   async createClient(data: Partial<Client>): Promise<ApiResponse<Client>> {
     return this.post<ApiResponse<Client>>('/clients', data);
   }
@@ -195,9 +200,9 @@ class ApiClient {
   }
 
   // 👤 Users
-  async getUsers(params?: any): Promise<ApiResponse<User[]>> {
-    return this.get<ApiResponse<User[]>>('/users', params);
-  }
+  // async getUsers(params?: any): Promise<ApiResponse<User[]>> {
+  //   return this.get<ApiResponse<User[]>>('/users', params);
+  // }
   async createUser(data: Partial<User>): Promise<ApiResponse<User>> {
     return this.post<ApiResponse<User>>('/users', data);
   }
@@ -454,51 +459,61 @@ async getInvoices(params?: { page?: number; limit?: number; status?: string; cli
   }
 
   // 📊 Analytics
-  async getEngagementAnalytics(params?: AnalyticsDateParams): Promise<ApiResponse<EngagementAnalytics>> {
-    return this.get<ApiResponse<EngagementAnalytics>>('/analytics/engagements', params);
-  }
-  async getUserPerformance(params?: AnalyticsDateParams): Promise<ApiResponse<UserPerformanceMetric[]>> {
-    return this.get<ApiResponse<UserPerformanceMetric[]>>('/analytics/users/performance', params);
-  }
-  async getBillingAnalytics(params?: AnalyticsDateParams): Promise<ApiResponse<BillingAnalytics>> {
-    return this.get<ApiResponse<BillingAnalytics>>('/analytics/billing/hours', params);
-  }
+async getRiskAnalytics(params?: AnalyticsDateParams): Promise<ApiResponse<RiskAnalytics>> {
+  return this.get<ApiResponse<RiskAnalytics>>('/analytics/risk', params);
+}
+
+// Ensure other methods use generic params:
+async getEngagementAnalytics(params?: AnalyticsDateParams): Promise<ApiResponse<EngagementAnalytics>> {
+  return this.get<ApiResponse<EngagementAnalytics>>('/analytics/engagements', params);
+}
+
+async getUserPerformance(params?: AnalyticsDateParams): Promise<ApiResponse<UserPerformanceMetric[]>> {
+  return this.get<ApiResponse<UserPerformanceMetric[]>>('/analytics/users/performance', params);
+}
+
+async getBillingAnalytics(params?: AnalyticsDateParams): Promise<ApiResponse<BillingAnalytics>> {
+  return this.get<ApiResponse<BillingAnalytics>>('/analytics/billing/hours', params);
+}
   async getEngagementProgress(id: string): Promise<ApiResponse<EngagementProgress>> {
     return this.get<ApiResponse<EngagementProgress>>(`/analytics/engagements/${id}/progress`);
   }
-  async getRiskAnalytics(params?: AnalyticsDateParams): Promise<ApiResponse<RiskAnalytics>> {
-    return this.get<ApiResponse<RiskAnalytics>>('/analytics/risk', params);
-  }
 
   // 📄 Reports
-  async getReportTemplates(): Promise<ApiResponse<ReportTemplate[]>> {
+// src/utils/api.ts
+async getReportTemplates(): Promise<ApiResponse<ReportTemplate[]>> {
     return this.get<ApiResponse<ReportTemplate[]>>('/reports/templates');
   }
-  async getReportHistory(): Promise<ApiResponse<ReportHistory[]>> {
-    return this.get<ApiResponse<ReportHistory[]>>('/reports/history');
-  }
-  async generateReport(code: string, params: any): Promise<ApiResponse<any>> {
+
+  async generateReport(templateId: string, params: any): Promise<ApiResponse<any>> {
     const { engagementId, ...dto } = params;
 
-    switch (code) {
-      case 'FINANCIAL_SUMMARY':
-      case 'financial-summary':
-        return this.post('/reports/financial-summary', dto);
-      case 'UTILIZATION':
-      case 'utilization':
-        return this.post('/reports/utilization', dto);
-      case 'ENGAGEMENT':
-      case 'engagement':
-        if (!engagementId) throw new Error('Engagement ID is required for this report');
+    // Use specific endpoints based on the template ID provided by the backend
+    switch (templateId) {
+      case 'engagement-summary':
+        if (!engagementId) throw new Error('Engagement ID is required');
         return this.post(`/reports/engagement/${engagementId}`, dto);
+      
+      case 'financial-dashboard':
+        return this.post('/reports/financial-summary', dto);
+      
+      case 'utilization-analysis':
+        return this.post('/reports/utilization', dto);
+      
       default:
-        throw new Error(`Unknown report template code: ${code}`);
+        // Generic fallback if new templates are added
+        return this.post(`/reports/generate/${templateId}`, params);
     }
   }
-  async downloadReport(reportId: string): Promise<Blob> {
-    const response = await this.client.get(`/reports/export/${reportId}`, { 
-      responseType: 'blob' 
-    });
+
+  // Endpoint to generate the export metadata and download URL
+  async exportReport(reportId: string): Promise<ApiResponse<{ downloadUrl: string }>> {
+    return this.post(`/reports/export/${reportId}`, {});
+  }
+
+  // Method to fetch the actual file blob using the URL returned from export
+  async downloadReportFile(path: string): Promise<Blob> {
+    const response = await this.client.get(path, { responseType: 'blob' });
     return response.data;
   }
 

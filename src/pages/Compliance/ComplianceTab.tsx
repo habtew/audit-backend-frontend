@@ -104,9 +104,10 @@
 
 
 import React, { useEffect, useState } from 'react';
-import apiClient from '../../../utils/api';
-import { AuditLog, UserAccessLog } from '../../../types';
-import LoadingSpinner from '../../../components/Common/LoadingSpinner';
+// import apiClient from '../../../utils/api';
+import apiClient from '../../utils/api';
+import { AuditLog, UserAccessLog } from '../../types';
+import LoadingSpinner from '../../components/Common/LoadingSpinner';
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import toast from 'react-hot-toast';
 

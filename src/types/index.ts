@@ -445,63 +445,61 @@ export interface AnalyticsDateParams {
   endDate?: string;
   engagementId?: string;
   userId?: string;
+  clientId?: string; // Added clientId
 }
 
 export interface EngagementAnalytics {
-  total: number;
-  active: number;
-  completed: number;
-  byStatus: Record<string, number>;
-  byType: Record<string, number>;
-  averageDurationDays: number;
-  engagementsOverTime?: Array<{ date: string; count: number }>; // Merged
+  totalEngagements: number;
+  engagementsByStatus: Record<string, number>;
+  engagementsByType: Record<string, number>;
+  averageHours: number;
 }
 
 export interface UserPerformanceMetric {
-  userId: string;
-  userName: string;
-  assignedEngagements: number;
-  completedWorkpapers: number;
-  billableHours: number;
-  tasksCompleted?: number;
-  efficiencyScore?: number;
+  user: {
+    firstName: string;
+    lastName: string;
+    role: string;
+  };
+  totalHours: number;
+  entriesCount: number;
 }
 
 export interface BillingAnalytics {
   totalHours: number;
-  billableHours: number;
-  nonBillableHours: number;
-  utilizationRate: number;
-  revenueByClient: Array<{ clientName: string; amount: number }>;
-  breakdownByEngagement?: Array<{ engagementName: string; hours: number; amount: number }>;
-}
-
-export interface EngagementProgress {
-  engagementId: string;
-  percentageComplete: number;
-  completedTasks: number;
-  totalTasks: number;
-  remainingTasks: number;
-  expectedCompletionDate: string;
-  status: string;
+  totalBillableAmount: string | number;
+  dailyBreakdown: Array<{
+    _sum: {
+      hours: number;
+    };
+    date: string;
+  }>;
 }
 
 export interface RiskAnalytics {
   totalRisks: number;
-  byLevel: {
-    LOW: number;
-    MEDIUM: number;
-    HIGH: number;
-    CRITICAL: number;
-  };
-  topRisks: Array<{
+  risksByLevel: Record<string, number>;
+  risksByCategory: Record<string, number>;
+}
+
+export interface EngagementProgress {
+  engagement: {
     id: string;
-    title: string;
-    level: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-    likelihood: number | string;
-    impact: number | string;
-  }>;
-  riskHeatmapData?: Array<{ impact: string; likelihood: string; count: number }>;
+    name: string;
+    status: string;
+    budgetHours: number;
+    actualHours: number;
+  };
+  progress: {
+    workpapers: { completed: number; total: number; percentage: number };
+    pbc: { completed: number; total: number; percentage: number };
+    overall: { percentage: number };
+  };
+  counts: {
+    workpapers: number;
+    pbcRequests: number;
+    documents: number;
+  };
 }
 
 export interface ReportTemplate {
@@ -585,4 +583,25 @@ export interface UpdatePBCRequestDto {
   status?: PBCStatus;
   assigneeId?: string;
   comments?: string;
+}
+
+
+export interface ClientResponse {
+  clients: Client[];
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+}
+
+export interface UserResponse {
+  users: User[];
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
 }

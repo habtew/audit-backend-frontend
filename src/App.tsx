@@ -144,7 +144,7 @@ import AnalyticsDashboard from './pages/Analytics/AnalyticsDashboard';
 import BillingDashboard from './pages/Billing/BillingDashboard';
 import EngagementDetail from './pages/EngagementDetail';
 import ReportsTab from './pages/Reports/ReportsTab';
-import ComplianceTab from './pages/Analytics/tabs/ComplianceTab';
+import ComplianceTab from './pages/Compliance/ComplianceTab';
 
 import LoadingSpinner from './components/Common/LoadingSpinner';
 import ErrorBoundary from './components/Common/ErrorBoundary';

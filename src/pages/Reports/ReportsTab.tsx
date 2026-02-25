@@ -1,5 +1,165 @@
+// // // import React, { useEffect, useState } from 'react';
+// // // import { DocumentArrowDownIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
+// // // import apiClient from '../../../utils/api';
+// // // import { ReportTemplate, ReportHistory } from '../../../types';
+// // // import toast from 'react-hot-toast';
+// // // import LoadingSpinner from '../../../components/Common/LoadingSpinner';
+
+// // // const ReportsTab: React.FC = () => {
+// // //   const [templates, setTemplates] = useState<ReportTemplate[]>([]);
+// // //   const [history, setHistory] = useState<ReportHistory[]>([]);
+// // //   const [loading, setLoading] = useState(true);
+// // //   const [generating, setGenerating] = useState<string | null>(null);
+
+// // //   useEffect(() => {
+// // //     loadData();
+// // //   }, []);
+
+// // //   const loadData = async () => {
+// // //     try {
+// // //       setLoading(true);
+// // //       const [tpl, hist] = await Promise.all([
+// // //         apiClient.getReportTemplates(),
+// // //         apiClient.getReportHistory()
+// // //       ]);
+      
+// // //       setTemplates(tpl.data || []);
+      
+// // //       // FIX: The backend returns { reports: [], message: ... }
+// // //       // We need to check if data is an array or an object containing the array
+// // //       const historyData = hist.data as any;
+// // //       if (Array.isArray(historyData)) {
+// // //         setHistory(historyData);
+// // //       } else if (historyData && Array.isArray(historyData.reports)) {
+// // //         setHistory(historyData.reports);
+// // //       } else {
+// // //         setHistory([]);
+// // //       }
+
+// // //     } catch (error) {
+// // //       console.error("Failed to load reports data", error);
+// // //       toast.error("Could not load reports");
+// // //     } finally {
+// // //       setLoading(false);
+// // //     }
+// // //   };
+
+// // //   const handleGenerate = async (code: string) => {
+// // //     setGenerating(code);
+// // //     try {
+// // //       await apiClient.generateReport(code, {
+// // //         startDate: new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString(), // Default to last month
+// // //         endDate: new Date().toISOString()
+// // //       });
+// // //       toast.success('Report generation started');
+// // //       loadData(); // Refresh history
+// // //     } catch (error) {
+// // //       console.error(error);
+// // //       toast.error('Failed to generate report');
+// // //     } finally {
+// // //       setGenerating(null);
+// // //     }
+// // //   };
+
+// // //   const handleDownload = async (id: string, name: string) => {
+// // //     try {
+// // //       const blob = await apiClient.downloadReport(id);
+// // //       const url = window.URL.createObjectURL(blob);
+// // //       const a = document.createElement('a');
+// // //       a.href = url;
+// // //       a.download = `${name}.pdf`;
+// // //       document.body.appendChild(a);
+// // //       a.click();
+// // //       window.URL.revokeObjectURL(url);
+// // //     } catch (error) {
+// // //       toast.error('Download failed');
+// // //     }
+// // //   };
+
+// // //   if (loading && templates.length === 0) return <LoadingSpinner />;
+
+// // //   return (
+// // //     <div className="space-y-8">
+// // //       {/* Templates Grid */}
+// // //       <div>
+// // //         <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Available Templates</h3>
+// // //         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+// // //           {templates.map((t) => (
+// // //             <div key={t.id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
+// // //               <div className="flex justify-between items-start">
+// // //                 <div className="p-2 bg-indigo-50 rounded-lg">
+// // //                   <DocumentTextIcon className="h-6 w-6 text-indigo-600" />
+// // //                 </div>
+// // //                 <span className="text-xs font-medium bg-gray-100 text-gray-800 px-2 py-1 rounded-full">
+// // //                   {t.code || 'REPORT'}
+// // //                 </span>
+// // //               </div>
+// // //               <h3 className="mt-4 text-lg font-medium text-gray-900">{t.name}</h3>
+// // //               <p className="mt-1 text-sm text-gray-500 min-h-[40px]">{t.description}</p>
+// // //               <button
+// // //                 onClick={() => handleGenerate(t.code)}
+// // //                 disabled={generating === t.code}
+// // //                 className="mt-4 w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+// // //               >
+// // //                 {generating === t.code ? 'Generating...' : 'Generate Report'}
+// // //               </button>
+// // //             </div>
+// // //           ))}
+// // //         </div>
+// // //       </div>
+
+// // //       {/* History List */}
+// // //       <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+// // //         <div className="px-4 py-5 sm:px-6 border-b border-gray-200 flex justify-between items-center">
+// // //           <h3 className="text-lg leading-6 font-medium text-gray-900">Report History</h3>
+// // //           <button onClick={loadData} className="text-sm text-indigo-600 hover:text-indigo-900">
+// // //             Refresh
+// // //           </button>
+// // //         </div>
+// // //         <ul className="divide-y divide-gray-200">
+// // //           {!history || history.length === 0 ? (
+// // //             <li className="px-4 py-8 text-center text-gray-500">No reports generated yet.</li>
+// // //           ) : (
+// // //             history.map((item) => (
+// // //               <li key={item.id} className="px-4 py-4 sm:px-6 flex items-center justify-between hover:bg-gray-50">
+// // //                 <div className="flex flex-col">
+// // //                   <span className="text-sm font-medium text-gray-900">{item.templateName || 'Unnamed Report'}</span>
+// // //                   <span className="text-xs text-gray-500">
+// // //                     Generated by {item.generatedBy} on {new Date(item.generatedAt).toLocaleString()}
+// // //                   </span>
+// // //                 </div>
+// // //                 <div className="flex items-center space-x-4">
+// // //                   <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+// // //                     item.status === 'COMPLETED' ? 'bg-green-100 text-green-800' : 
+// // //                     item.status === 'FAILED' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
+// // //                   }`}>
+// // //                     {item.status}
+// // //                   </span>
+// // //                   {item.status === 'COMPLETED' && (
+// // //                     <button 
+// // //                       onClick={() => handleDownload(item.id, item.templateName)}
+// // //                       className="text-gray-400 hover:text-indigo-600 transition-colors"
+// // //                       title="Download PDF"
+// // //                     >
+// // //                       <DocumentArrowDownIcon className="h-5 w-5" />
+// // //                     </button>
+// // //                   )}
+// // //                 </div>
+// // //               </li>
+// // //             ))
+// // //           )}
+// // //         </ul>
+// // //       </div>
+// // //     </div>
+// // //   );
+// // // };
+
+// // // export default ReportsTab;
+
+
+
 // // import React, { useEffect, useState } from 'react';
-// // import { DocumentArrowDownIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
+// // import { DocumentArrowDownIcon, DocumentTextIcon, PlayIcon } from '@heroicons/react/24/outline';
 // // import apiClient from '../../../utils/api';
 // // import { ReportTemplate, ReportHistory } from '../../../types';
 // // import toast from 'react-hot-toast';
@@ -10,6 +170,11 @@
 // //   const [history, setHistory] = useState<ReportHistory[]>([]);
 // //   const [loading, setLoading] = useState(true);
 // //   const [generating, setGenerating] = useState<string | null>(null);
+
+// //   // Simple prompt state for Engagement ID
+// //   const [showPrompt, setShowPrompt] = useState(false);
+// //   const [promptCode, setPromptCode] = useState('');
+// //   const [engagementIdInput, setEngagementIdInput] = useState('');
 
 // //   useEffect(() => {
 // //     loadData();
@@ -25,8 +190,6 @@
       
 // //       setTemplates(tpl.data || []);
       
-// //       // FIX: The backend returns { reports: [], message: ... }
-// //       // We need to check if data is an array or an object containing the array
 // //       const historyData = hist.data as any;
 // //       if (Array.isArray(historyData)) {
 // //         setHistory(historyData);
@@ -44,18 +207,39 @@
 // //     }
 // //   };
 
-// //   const handleGenerate = async (code: string) => {
+// //   const initiateGenerate = (code: string) => {
+// //     // If it's an engagement report, we need an ID
+// //     if (code.toLowerCase().includes('engagement')) {
+// //       setPromptCode(code);
+// //       setShowPrompt(true);
+// //     } else {
+// //       handleGenerate(code);
+// //     }
+// //   };
+
+// //   const handleGenerate = async (code: string, engagementId?: string) => {
 // //     setGenerating(code);
 // //     try {
-// //       await apiClient.generateReport(code, {
-// //         startDate: new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString(), // Default to last month
+// //       // Build Params
+// //       const params: any = {
+// //         startDate: new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString(),
 // //         endDate: new Date().toISOString()
-// //       });
+// //       };
+
+// //       if (engagementId) {
+// //         params.engagementId = engagementId;
+// //       }
+
+// //       await apiClient.generateReport(code, params);
+      
 // //       toast.success('Report generation started');
-// //       loadData(); // Refresh history
-// //     } catch (error) {
+// //       setShowPrompt(false);
+// //       setEngagementIdInput('');
+// //       loadData(); 
+// //     } catch (error: any) {
 // //       console.error(error);
-// //       toast.error('Failed to generate report');
+// //       const msg = error?.response?.data?.message || 'Failed to start generation';
+// //       toast.error(msg);
 // //     } finally {
 // //       setGenerating(null);
 // //     }
@@ -79,7 +263,38 @@
 // //   if (loading && templates.length === 0) return <LoadingSpinner />;
 
 // //   return (
-// //     <div className="space-y-8">
+// //     <div className="space-y-8 relative">
+      
+// //       {/* --- ID Prompt Modal --- */}
+// //       {showPrompt && (
+// //         <div className="absolute inset-0 z-10 flex items-center justify-center bg-gray-500 bg-opacity-50 rounded-lg">
+// //           <div className="bg-white p-6 rounded-lg shadow-xl w-96">
+// //             <h3 className="text-lg font-medium mb-4">Enter Engagement ID</h3>
+// //             <input 
+// //               type="text" 
+// //               className="w-full border rounded p-2 mb-4"
+// //               placeholder="UUID..."
+// //               value={engagementIdInput}
+// //               onChange={(e) => setEngagementIdInput(e.target.value)}
+// //             />
+// //             <div className="flex justify-end space-x-3">
+// //               <button 
+// //                 onClick={() => setShowPrompt(false)} 
+// //                 className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
+// //               >
+// //                 Cancel
+// //               </button>
+// //               <button 
+// //                 onClick={() => handleGenerate(promptCode, engagementIdInput)}
+// //                 className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+// //               >
+// //                 Generate
+// //               </button>
+// //             </div>
+// //           </div>
+// //         </div>
+// //       )}
+
 // //       {/* Templates Grid */}
 // //       <div>
 // //         <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Available Templates</h3>
@@ -97,11 +312,15 @@
 // //               <h3 className="mt-4 text-lg font-medium text-gray-900">{t.name}</h3>
 // //               <p className="mt-1 text-sm text-gray-500 min-h-[40px]">{t.description}</p>
 // //               <button
-// //                 onClick={() => handleGenerate(t.code)}
+// //                 onClick={() => initiateGenerate(t.code)}
 // //                 disabled={generating === t.code}
-// //                 className="mt-4 w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+// //                 className="mt-4 w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none disabled:opacity-50"
 // //               >
-// //                 {generating === t.code ? 'Generating...' : 'Generate Report'}
+// //                 {generating === t.code ? 'Generating...' : (
+// //                   <>
+// //                     <PlayIcon className="h-4 w-4 mr-2" /> Generate Report
+// //                   </>
+// //                 )}
 // //               </button>
 // //             </div>
 // //           ))}
@@ -157,13 +376,13 @@
 // // export default ReportsTab;
 
 
-
+// //
 // import React, { useEffect, useState } from 'react';
 // import { DocumentArrowDownIcon, DocumentTextIcon, PlayIcon } from '@heroicons/react/24/outline';
-// import apiClient from '../../../utils/api';
-// import { ReportTemplate, ReportHistory } from '../../../types';
+// import apiClient from '../../utils/api';
+// import { ReportTemplate, ReportHistory } from '../../types';
 // import toast from 'react-hot-toast';
-// import LoadingSpinner from '../../../components/Common/LoadingSpinner';
+// import LoadingSpinner from '../../components/Common/LoadingSpinner';
 
 // const ReportsTab: React.FC = () => {
 //   const [templates, setTemplates] = useState<ReportTemplate[]>([]);
@@ -171,7 +390,6 @@
 //   const [loading, setLoading] = useState(true);
 //   const [generating, setGenerating] = useState<string | null>(null);
 
-//   // Simple prompt state for Engagement ID
 //   const [showPrompt, setShowPrompt] = useState(false);
 //   const [promptCode, setPromptCode] = useState('');
 //   const [engagementIdInput, setEngagementIdInput] = useState('');
@@ -208,8 +426,10 @@
 //   };
 
 //   const initiateGenerate = (code: string) => {
-//     // If it's an engagement report, we need an ID
-//     if (code.toLowerCase().includes('engagement')) {
+//     // FIX: Added safety check (code || '') to prevent toLowerCase() on undefined
+//     const normalizedCode = (code || '').toLowerCase();
+    
+//     if (normalizedCode.includes('engagement')) {
 //       setPromptCode(code);
 //       setShowPrompt(true);
 //     } else {
@@ -220,7 +440,6 @@
 //   const handleGenerate = async (code: string, engagementId?: string) => {
 //     setGenerating(code);
 //     try {
-//       // Build Params
 //       const params: any = {
 //         startDate: new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString(),
 //         endDate: new Date().toISOString()
@@ -263,11 +482,14 @@
 //   if (loading && templates.length === 0) return <LoadingSpinner />;
 
 //   return (
-//     <div className="space-y-8 relative">
-      
-//       {/* --- ID Prompt Modal --- */}
+//     <div className="p-6 space-y-8 relative">
+//       <div>
+//         <h1 className="text-2xl font-bold text-gray-900 mb-2">Reports & Documentation</h1>
+//         <p className="text-gray-600 mb-6">Generate and manage audit reports and financial summaries.</p>
+//       </div>
+
 //       {showPrompt && (
-//         <div className="absolute inset-0 z-10 flex items-center justify-center bg-gray-500 bg-opacity-50 rounded-lg">
+//         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-500 bg-opacity-50">
 //           <div className="bg-white p-6 rounded-lg shadow-xl w-96">
 //             <h3 className="text-lg font-medium mb-4">Enter Engagement ID</h3>
 //             <input 
@@ -328,10 +550,10 @@
 //       </div>
 
 //       {/* History List */}
-//       <div className="bg-white shadow overflow-hidden sm:rounded-lg">
-//         <div className="px-4 py-5 sm:px-6 border-b border-gray-200 flex justify-between items-center">
+//       <div className="bg-white shadow overflow-hidden sm:rounded-lg border border-gray-200">
+//         <div className="px-4 py-5 sm:px-6 border-b border-gray-200 flex justify-between items-center bg-gray-50">
 //           <h3 className="text-lg leading-6 font-medium text-gray-900">Report History</h3>
-//           <button onClick={loadData} className="text-sm text-indigo-600 hover:text-indigo-900">
+//           <button onClick={loadData} className="text-sm text-indigo-600 hover:text-indigo-900 font-medium">
 //             Refresh
 //           </button>
 //         </div>
@@ -376,220 +598,177 @@
 // export default ReportsTab;
 
 
-//
+// src/pages/Reports/ReportsTab.tsx
+
 import React, { useEffect, useState } from 'react';
-import { DocumentArrowDownIcon, DocumentTextIcon, PlayIcon } from '@heroicons/react/24/outline';
+import { DocumentTextIcon, PlayIcon, DocumentArrowDownIcon } from '@heroicons/react/24/outline';
 import apiClient from '../../utils/api';
-import { ReportTemplate, ReportHistory } from '../../types';
+import { ReportTemplate, Client, Engagement } from '../../types';
 import toast from 'react-hot-toast';
 import LoadingSpinner from '../../components/Common/LoadingSpinner';
 
 const ReportsTab: React.FC = () => {
   const [templates, setTemplates] = useState<ReportTemplate[]>([]);
-  const [history, setHistory] = useState<ReportHistory[]>([]);
   const [loading, setLoading] = useState(true);
-  const [generating, setGenerating] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
 
-  const [showPrompt, setShowPrompt] = useState(false);
-  const [promptCode, setPromptCode] = useState('');
-  const [engagementIdInput, setEngagementIdInput] = useState('');
+  // Configuration Modal State
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<ReportTemplate | null>(null);
+  const [form, setForm] = useState({
+    startDate: new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0],
+    endDate: new Date().toISOString().split('T')[0],
+    clientId: '',
+    engagementId: ''
+  });
+
+  const [clients, setClients] = useState<Client[]>([]);
+  const [engagements, setEngagements] = useState<Engagement[]>([]);
 
   useEffect(() => {
-    loadData();
+    loadTemplates();
+    fetchMetadata();
   }, []);
 
-  const loadData = async () => {
+  const loadTemplates = async () => {
     try {
       setLoading(true);
-      const [tpl, hist] = await Promise.all([
-        apiClient.getReportTemplates(),
-        apiClient.getReportHistory()
-      ]);
-      
-      setTemplates(tpl.data || []);
-      
-      const historyData = hist.data as any;
-      if (Array.isArray(historyData)) {
-        setHistory(historyData);
-      } else if (historyData && Array.isArray(historyData.reports)) {
-        setHistory(historyData.reports);
-      } else {
-        setHistory([]);
-      }
-
-    } catch (error) {
-      console.error("Failed to load reports data", error);
-      toast.error("Could not load reports");
+      const res = await apiClient.getReportTemplates();
+      setTemplates(res.data || []);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to load report templates");
     } finally {
       setLoading(false);
     }
   };
 
-  const initiateGenerate = (code: string) => {
-    // FIX: Added safety check (code || '') to prevent toLowerCase() on undefined
-    const normalizedCode = (code || '').toLowerCase();
-    
-    if (normalizedCode.includes('engagement')) {
-      setPromptCode(code);
-      setShowPrompt(true);
-    } else {
-      handleGenerate(code);
+  const fetchMetadata = async () => {
+    try {
+      const [cRes, eRes] = await Promise.all([
+        apiClient.getClients(),
+        apiClient.getEngagements()
+      ]);
+      setClients(cRes.data.clients || []);
+      setEngagements(eRes.data.engagements || []);
+    } catch (err) {
+      console.error("Metadata fetch failed", err);
     }
   };
 
-  const handleGenerate = async (code: string, engagementId?: string) => {
-    setGenerating(code);
+  const handleGenerate = async () => {
+    if (!selectedTemplate) return;
+    setGenerating(true);
     try {
-      const params: any = {
-        startDate: new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString(),
-        endDate: new Date().toISOString()
+      const payload = {
+        startDate: new Date(form.startDate).toISOString(),
+        endDate: new Date(form.endDate).toISOString(),
+        format: 'PDF',
+        sections: ['summary', 'details', 'charts'],
+        clientId: form.clientId || undefined,
+        engagementId: form.engagementId || undefined
       };
 
-      if (engagementId) {
-        params.engagementId = engagementId;
-      }
-
-      await apiClient.generateReport(code, params);
+      const res = await apiClient.generateReport(selectedTemplate.id, payload);
+      toast.success('Report generation successful');
+      setIsModalOpen(false);
       
-      toast.success('Report generation started');
-      setShowPrompt(false);
-      setEngagementIdInput('');
-      loadData(); 
+      // Since history is not implemented, we can offer immediate export/download of the result
+      if (res.data && res.data.id) {
+         handleImmediateDownload(res.data.id, selectedTemplate.name);
+      }
     } catch (error: any) {
-      console.error(error);
-      const msg = error?.response?.data?.message || 'Failed to start generation';
-      toast.error(msg);
+      toast.error(error?.response?.data?.message || "Generation failed");
     } finally {
-      setGenerating(null);
+      setGenerating(false);
     }
   };
 
-  const handleDownload = async (id: string, name: string) => {
+  const handleImmediateDownload = async (reportId: string, name: string) => {
     try {
-      const blob = await apiClient.downloadReport(id);
+      const exportRes = await apiClient.exportReport(reportId);
+      const blob = await apiClient.downloadReportFile(exportRes.data.downloadUrl);
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${name}.pdf`;
+      a.download = `${name.replace(/\s+/g, '_')}.pdf`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
-    } catch (error) {
-      toast.error('Download failed');
+    } catch (err) {
+      toast.error("Download failed");
     }
   };
 
-  if (loading && templates.length === 0) return <LoadingSpinner />;
+  if (loading) return <LoadingSpinner />;
 
   return (
-    <div className="p-6 space-y-8 relative">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Reports & Documentation</h1>
-        <p className="text-gray-600 mb-6">Generate and manage audit reports and financial summaries.</p>
+    <div className="p-6 space-y-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {templates.map((t) => (
+          <div key={t.id} className="bg-white border rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow">
+            <DocumentTextIcon className="h-8 w-8 text-indigo-500 mb-4" />
+            <h3 className="text-lg font-bold text-gray-900">{t.name}</h3>
+            <p className="text-sm text-gray-500 mt-2 mb-4">{t.description}</p>
+            <button
+              onClick={() => { setSelectedTemplate(t); setIsModalOpen(true); }}
+              className="flex items-center justify-center w-full px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 font-medium"
+            >
+              <PlayIcon className="h-4 w-4 mr-2" /> Configure & Generate
+            </button>
+          </div>
+        ))}
       </div>
 
-      {showPrompt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-500 bg-opacity-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl w-96">
-            <h3 className="text-lg font-medium mb-4">Enter Engagement ID</h3>
-            <input 
-              type="text" 
-              className="w-full border rounded p-2 mb-4"
-              placeholder="UUID..."
-              value={engagementIdInput}
-              onChange={(e) => setEngagementIdInput(e.target.value)}
-            />
-            <div className="flex justify-end space-x-3">
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white rounded-xl shadow-2xl w-[500px] p-6">
+            <h2 className="text-xl font-bold mb-4">Run {selectedTemplate?.name}</h2>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase">Start Date</label>
+                  <input type="date" value={form.startDate} onChange={e => setForm({...form, startDate: e.target.value})} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase">End Date</label>
+                  <input type="date" value={form.endDate} onChange={e => setForm({...form, endDate: e.target.value})} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" />
+                </div>
+              </div>
+              {selectedTemplate?.id === 'engagement-summary' && (
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase">Engagement</label>
+                  <select value={form.engagementId} onChange={e => setForm({...form, engagementId: e.target.value})} className="mt-1 block w-full rounded-md border-gray-300">
+                    <option value="">Select Engagement...</option>
+                    {engagements.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                  </select>
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase">Client Filter (Optional)</label>
+                <select value={form.clientId} onChange={e => setForm({...form, clientId: e.target.value})} className="mt-1 block w-full rounded-md border-gray-300">
+                  <option value="">All Clients</option>
+                  {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="mt-8 flex justify-end space-x-3">
+              <button onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancel</button>
               <button 
-                onClick={() => setShowPrompt(false)} 
-                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
+                onClick={handleGenerate} 
+                disabled={generating}
+                className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
               >
-                Cancel
-              </button>
-              <button 
-                onClick={() => handleGenerate(promptCode, engagementIdInput)}
-                className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
-              >
-                Generate
+                {generating ? 'Processing...' : 'Generate Report'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Templates Grid */}
-      <div>
-        <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">Available Templates</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {templates.map((t) => (
-            <div key={t.id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
-              <div className="flex justify-between items-start">
-                <div className="p-2 bg-indigo-50 rounded-lg">
-                  <DocumentTextIcon className="h-6 w-6 text-indigo-600" />
-                </div>
-                <span className="text-xs font-medium bg-gray-100 text-gray-800 px-2 py-1 rounded-full">
-                  {t.code || 'REPORT'}
-                </span>
-              </div>
-              <h3 className="mt-4 text-lg font-medium text-gray-900">{t.name}</h3>
-              <p className="mt-1 text-sm text-gray-500 min-h-[40px]">{t.description}</p>
-              <button
-                onClick={() => initiateGenerate(t.code)}
-                disabled={generating === t.code}
-                className="mt-4 w-full inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none disabled:opacity-50"
-              >
-                {generating === t.code ? 'Generating...' : (
-                  <>
-                    <PlayIcon className="h-4 w-4 mr-2" /> Generate Report
-                  </>
-                )}
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* History List */}
-      <div className="bg-white shadow overflow-hidden sm:rounded-lg border border-gray-200">
-        <div className="px-4 py-5 sm:px-6 border-b border-gray-200 flex justify-between items-center bg-gray-50">
-          <h3 className="text-lg leading-6 font-medium text-gray-900">Report History</h3>
-          <button onClick={loadData} className="text-sm text-indigo-600 hover:text-indigo-900 font-medium">
-            Refresh
-          </button>
-        </div>
-        <ul className="divide-y divide-gray-200">
-          {!history || history.length === 0 ? (
-            <li className="px-4 py-8 text-center text-gray-500">No reports generated yet.</li>
-          ) : (
-            history.map((item) => (
-              <li key={item.id} className="px-4 py-4 sm:px-6 flex items-center justify-between hover:bg-gray-50">
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium text-gray-900">{item.templateName || 'Unnamed Report'}</span>
-                  <span className="text-xs text-gray-500">
-                    Generated by {item.generatedBy} on {new Date(item.generatedAt).toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex items-center space-x-4">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                    item.status === 'COMPLETED' ? 'bg-green-100 text-green-800' : 
-                    item.status === 'FAILED' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
-                  }`}>
-                    {item.status}
-                  </span>
-                  {item.status === 'COMPLETED' && (
-                    <button 
-                      onClick={() => handleDownload(item.id, item.templateName)}
-                      className="text-gray-400 hover:text-indigo-600 transition-colors"
-                      title="Download PDF"
-                    >
-                      <DocumentArrowDownIcon className="h-5 w-5" />
-                    </button>
-                  )}
-                </div>
-              </li>
-            ))
-          )}
-        </ul>
+      <div className="bg-white border rounded-xl overflow-hidden shadow-sm">
+        <div className="p-4 bg-gray-50 border-b"><h3 className="font-bold">Generation History</h3></div>
+        <div className="p-12 text-center"><p className="text-gray-500 font-medium">Report history is coming soon!</p></div>
       </div>
     </div>
   );
