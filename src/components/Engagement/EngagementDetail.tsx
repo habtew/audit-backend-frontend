@@ -6,11 +6,12 @@ import {
   DocumentChartBarIcon, 
   MapIcon,
   ShieldCheckIcon,
-  PlayCircleIcon
+  CheckBadgeIcon
 } from '@heroicons/react/24/outline';
 import api from '../utils/api';
 import LoadingSpinner from '../components/Common/LoadingSpinner';
 import PBCRequestsList from '../components/Engagement/PBCRequestsList';
+// import PreEngagementTab from '../components/Engagement/PreEngagementTab';
 import PreEngagementTab from '../components/Engagement/PreEngagementTab';
 import PlanningTab from '../components/Engagement/Planning/PlanningTab';
 import toast from 'react-hot-toast';
@@ -22,7 +23,7 @@ const EngagementDetail: React.FC = () => {
   const [engagement, setEngagement] = useState<Engagement | null>(null);
   const [loading, setLoading] = useState(true);
   
-  // Tabs: Overview | Pre-Engagement | Planning | Fieldwork
+  // Tabs: Overview | Pre-Engagement | Planning | Fieldwork | Completion
   const [activeTab, setActiveTab] = useState('overview');
 
   useEffect(() => {
@@ -34,11 +35,9 @@ const EngagementDetail: React.FC = () => {
       const res = await api.getEngagementById(id!);
       setEngagement(res.data);
       
-      // Auto-switch to active phase tab if loading fresh
-      if (res.data.status === 'EXECUTION') {
-        // Optional: Uncomment to auto-open Fieldwork on load
-        // setActiveTab('fieldwork');
-      }
+      // Auto-select tab based on status if first load
+      // if (res.data.status === 'PLANNING') setActiveTab('planning');
+      // if (res.data.status === 'EXECUTION') setActiveTab('fieldwork');
     } catch (error) {
       toast.error('Failed to load engagement');
       navigate('/engagements');
@@ -55,8 +54,7 @@ const EngagementDetail: React.FC = () => {
   if (!engagement) return <div>Engagement not found</div>;
 
   const isPlanningActive = engagement.status === 'PLANNING';
-  const isExecutionActive = ['EXECUTION', 'REVIEW', 'COMPLETED'].includes(engagement.status);
-  const isCurrentlyExecuting = engagement.status === 'EXECUTION';
+  const isExecutionActive = engagement.status === 'EXECUTION' || engagement.status === 'REVIEW' || engagement.status === 'COMPLETED';
 
   return (
     <div className="space-y-6">
@@ -113,12 +111,12 @@ const EngagementDetail: React.FC = () => {
 
           <button
             onClick={() => setActiveTab('fieldwork')}
-            disabled={!isExecutionActive && !isPlanningActive} 
-            className={`${activeTab === 'fieldwork' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'} ${(!isExecutionActive && !isPlanningActive) ? 'opacity-50 cursor-not-allowed' : ''} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
+            disabled={!isExecutionActive && !isPlanningActive} // Allow viewing if planning is active (optional, typically locked until complete)
+            className={`${activeTab === 'fieldwork' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'} ${!isExecutionActive ? 'opacity-50 cursor-not-allowed' : ''} whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
           >
             <ClipboardDocumentCheckIcon className="h-4 w-4 mr-2" />
             Fieldwork (Execution)
-            {isCurrentlyExecuting && <span className="ml-2 h-2 w-2 rounded-full bg-blue-500 animate-pulse" />}
+            {isExecutionActive && engagement.status === 'EXECUTION' && <span className="ml-2 h-2 w-2 rounded-full bg-blue-400 animate-pulse" />}
           </button>
         </nav>
       </div>
@@ -127,6 +125,7 @@ const EngagementDetail: React.FC = () => {
       <div className="min-h-[500px]">
         {activeTab === 'overview' && (
           <div className="bg-white shadow overflow-hidden sm:rounded-lg">
+             {/* ... Existing overview content ... */}
              <div className="px-4 py-5 sm:px-6">
                <h3 className="text-lg leading-6 font-medium text-gray-900">Engagement Summary</h3>
              </div>
@@ -134,11 +133,11 @@ const EngagementDetail: React.FC = () => {
                 <dl className="grid grid-cols-1 gap-x-4 gap-y-8 sm:grid-cols-2">
                    <div className="sm:col-span-1">
                       <dt className="text-sm font-medium text-gray-500">Timeline</dt>
-                      <dd className="mt-1 text-sm text-gray-900">{engagement.startDate ? new Date(engagement.startDate).toLocaleDateString() : 'N/A'} - {engagement.endDate ? new Date(engagement.endDate).toLocaleDateString() : 'N/A'}</dd>
+                      <dd className="mt-1 text-sm text-gray-900">{new Date(engagement.startDate!).toLocaleDateString()} - {new Date(engagement.endDate!).toLocaleDateString()}</dd>
                    </div>
                    <div className="sm:col-span-1">
                       <dt className="text-sm font-medium text-gray-500">Fiscal Year End</dt>
-                      <dd className="mt-1 text-sm text-gray-900">{engagement.yearEnd ? new Date(engagement.yearEnd).toLocaleDateString() : 'N/A'}</dd>
+                      <dd className="mt-1 text-sm text-gray-900">{new Date(engagement.yearEnd!).toLocaleDateString()}</dd>
                    </div>
                    <div className="sm:col-span-2">
                       <dt className="text-sm font-medium text-gray-500">Description</dt>
@@ -158,37 +157,24 @@ const EngagementDetail: React.FC = () => {
         )}
 
         {activeTab === 'fieldwork' && (
-          <div className="space-y-6 animate-fadeIn">
+          <div className="space-y-6">
+            {/* Fieldwork Sub-navigation could go here */}
+            <div className="bg-white p-4 rounded-lg shadow mb-4">
+               <h3 className="text-lg font-bold mb-2">Audit Procedures</h3>
+               <p className="text-gray-500">Manage PBC Requests, Trial Balances, and Workpapers.</p>
+            </div>
             
-            {/* --- EXECUTION INDICATOR --- */}
-            {isCurrentlyExecuting && (
-              <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-md shadow-sm mb-6 flex items-start">
-                <div className="flex-shrink-0 mt-0.5">
-                  <PlayCircleIcon className="h-6 w-6 text-blue-600 animate-pulse" />
-                </div>
-                <div className="ml-3">
-                  <h3 className="text-base font-bold text-blue-800">Execution Phase In Progress</h3>
-                  <div className="mt-1 text-sm text-blue-700">
-                    <p>
-                      This engagement is currently in the <strong>Active Fieldwork</strong> stage. 
-                      You may now proceed with substantive testing, upload workpapers, and manage PBC requests.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
+            {/* Embed PBC Requests */}
             <div className="bg-white shadow rounded-lg p-4">
               <h4 className="font-semibold mb-4 flex items-center"><ClipboardDocumentCheckIcon className="h-5 w-5 mr-2"/> PBC Requests</h4>
               <PBCRequestsList engagementId={id!} />
             </div>
 
+            {/* Placeholder for TB */}
             <div className="bg-white shadow rounded-lg p-4">
                <h4 className="font-semibold mb-4 flex items-center"><DocumentChartBarIcon className="h-5 w-5 mr-2"/> Trial Balance</h4>
                <div className="bg-gray-50 p-6 text-center text-gray-500 rounded border border-dashed border-gray-300">
-                  <button onClick={() => navigate(`/trial-balances?engagementId=${id}`)} className="text-indigo-600 hover:underline font-medium">
-                    Open Trial Balance Module &rarr;
-                  </button>
+                  Trial Balance Module
                </div>
             </div>
           </div>

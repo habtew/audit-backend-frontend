@@ -127,12 +127,104 @@ export interface Entity {
   updatedAt?: string;
 }
 
+// --- Pre-Engagement & Planning Types (NEW) ---
+
+export interface PreEngagement {
+  id: string;
+  clientId: string;
+  status: 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
+  financialFramework: string;
+  auditPeriodStart: string;
+  auditPeriodEnd: string;
+  integrityCheckResult?: string;
+  competenceCheckResult?: string;
+  ethicalConflictNotes?: string;
+  termsAgreed?: boolean;
+  agreedFee?: number | string;
+  currency?: string;
+  engagementLetterUrl?: string;
+  managementAcknowledged?: boolean;
+  createdById?: string;
+  approvedById?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Materiality {
+  id: string;
+  engagementId: string;
+  benchmark: string;
+  benchmarkValue: number | string;
+  rulePercentage: number | string;
+  overallMateriality: number | string;
+  performanceMateriality: number | string;
+  trivialThreshold: number | string;
+  rationale: string;
+  isFinal: boolean;
+  approvedById?: string;
+  createdAt: string;
+}
+
+export interface AuditStrategy {
+  id: string;
+  engagementId: string;
+  scope: string;
+  timing: string;
+  direction: string;
+  significantChanges?: string;
+  resources: string;
+  useOfExperts: boolean;
+  relianceOnControls: boolean;
+  itEnvironmentConsidered: boolean;
+  financialStatementLevelRisks?: string;
+  significantRiskSummary?: string;
+  status: 'DRAFT' | 'FINAL';
+  approvedById?: string;
+  createdAt: string;
+}
+
+export interface FraudBrainstorming {
+  id: string;
+  engagementId: string;
+  discussionDate: string;
+  participants: string;
+  fraudRisksIdentified: string;
+  managementOverride: string;
+  revenueFraudPresumption: boolean;
+  revenueFraudRationale?: string; // If presumption rejected
+  conclusion: string;
+  isFinal: boolean;
+  approvedById?: string;
+  createdAt: string;
+}
+
+// Enhanced Risk Type for Planning Phase
+export interface PlanningRisk {
+  id: string;
+  engagementId: string;
+  riskDescription: string;
+  category: 'FRAUD' | 'ERROR' | 'SIGNIFICANT' | 'OTHER';
+  accountArea: string;
+  riskLevelType: 'FINANCIAL_STATEMENT_LEVEL' | 'ASSERTION_LEVEL';
+  assertion?: 'EXISTENCE' | 'RIGHTS_OBLIGATIONS' | 'COMPLETENESS' | 'ACCURACY_VALUATION' | 'CLASSIFICATION' | 'PRESENTATION';
+  inherentRisk: 'LOW' | 'MEDIUM' | 'HIGH';
+  controlRisk: 'LOW' | 'MEDIUM' | 'HIGH';
+  detectionRisk: 'LOW' | 'MEDIUM' | 'HIGH';
+  isSignificant: boolean;
+  isFraudRisk: boolean;
+  mitigationPlan: string;
+  status: 'DRAFT' | 'FINAL';
+  assessedBy?: string;
+  createdAt: string;
+}
+
 // --- Engagement Types ---
 export interface Engagement {
   id: string;
   name: string;
   type: 'AUDIT' | 'REVIEW' | 'COMPILATION' | 'TAX' | 'ADVISORY';
-  status: 'PLANNING' | 'FIELDWORK' | 'REVIEW' | 'COMPLETED' | 'ARCHIVED';
+  // Updated status to include EXECUTION based on new backend
+  status: 'PLANNING' | 'EXECUTION' | 'FIELDWORK' | 'REVIEW' | 'COMPLETED' | 'ARCHIVED'; 
   description?: string;
   startDate?: string;
   endDate?: string;
@@ -146,6 +238,9 @@ export interface Engagement {
   client?: { id: string; name: string };
   entity?: { id: string; name: string };
   creator?: { firstName: string; lastName: string; email: string };
+  // New Links
+  preEngagementId?: string;
+  preEngagement?: PreEngagement;
 }
 
 export interface EngagementResponse {
@@ -206,7 +301,7 @@ export interface WorkpaperTemplate {
   description?: string;
 }
 
-// --- Risk Assessment Types ---
+// --- Risk Assessment Types (Legacy/Simple) ---
 export interface RiskAssessment {
   id: string;
   engagementId: string;
@@ -265,6 +360,7 @@ export interface RiskReport {
   generatedBy: string;
 }
 
+// --- Trial Balance Types ---
 export interface TrialBalanceSummaryData {
   totalAccounts: number;
   totalDebits: number | string;
