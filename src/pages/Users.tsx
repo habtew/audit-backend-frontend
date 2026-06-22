@@ -1,391 +1,347 @@
-import React, { useEffect, useState } from 'react';
-import { PlusIcon, MagnifyingGlassIcon, PencilIcon, TrashIcon, ShieldExclamationIcon } from '@heroicons/react/24/outline';
+// src/pages/Users.tsx
+import React, { useState, useEffect, Fragment } from 'react';
+import { toast } from 'react-hot-toast';
 import { Dialog, Transition } from '@headlessui/react';
-import { Fragment } from 'react';
-import { useForm } from 'react-hook-form';
+import { 
+  UsersIcon, PlusIcon, PencilSquareIcon, TrashIcon, 
+  NoSymbolIcon, CheckCircleIcon
+} from '@heroicons/react/24/outline';
 import apiClient from '../utils/api';
-import { User } from '../types';
-import { useAuth } from '../hooks/useAuth';
+import RoleGuard from '../components/Auth/RoleGuard';
 import LoadingSpinner from '../components/Common/LoadingSpinner';
-import EmptyState from '../components/Common/EmptyState';
-import toast from 'react-hot-toast';
 
 const Users: React.FC = () => {
-  const { user: currentUser } = useAuth();
-  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
 
-  // Role Check
-  const userRole = currentUser?.role?.toUpperCase() || 'STAFF';
-  const canManageUsers = ['ADMIN', 'MANAGER', 'PARTNER'].includes(userRole);
+  // Data States
+  const [users, setUsers] = useState<any[]>([]);
+  const [currentUserProfile, setCurrentUserProfile] = useState<any>(null);
+  
+  // Modal States
+  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
-  const {
-    register,
-    handleSubmit,
-    reset,
-    setValue,
-    formState: { errors },
-  } = useForm<Partial<User>>();
+  // Form State
+  const [form, setForm] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    password: '',
+    role: 'STAFF'
+  });
 
-  useEffect(() => {
-    if (canManageUsers) {
-      fetchUsers();
-    } else {
-      setLoading(false);
-    }
-  }, [canManageUsers]);
-
-  const fetchUsers = async () => {
+  // Fetch all users and current profile
+  const fetchData = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const response: any = await apiClient.getUsers();
+      const [usersRes, profileRes] = await Promise.all([
+        apiClient.getUsers(),
+        apiClient.getUserProfile().catch(() => ({ data: null }))
+      ]);
       
-      // Robust extraction
-      let userData: User[] = [];
-      // Case 1: Direct Array
-      if (Array.isArray(response)) {
-        userData = response;
-      } 
-      // Case 2: { data: [...] }
-      else if (response?.data && Array.isArray(response.data)) {
-        userData = response.data;
-      } 
-      // Case 3: { data: { users: [...] } } - Common for pagination
-      else if (response?.data?.users && Array.isArray(response.data.users)) {
-        userData = response.data.users;
-      }
+      const uData = usersRes.data?.data?.users || usersRes.data?.users || [];
+      setUsers(Array.isArray(uData) ? uData : []);
       
-      setUsers(userData);
+      const pData = profileRes.data?.data || profileRes.data;
+      setCurrentUserProfile(pData);
     } catch (error) {
-      console.error('Failed to fetch users:', error);
-      setUsers([]);
+      console.error("Failed to fetch users", error);
+      toast.error("Failed to load users list.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCreateUser = async (data: Partial<User>) => {
+  useEffect(() => { fetchData(); }, []);
+
+  // --- Safe Error Handler ---
+  const handleError = (e: any, fallback: string) => {
+    const errorObj = e.response?.data;
+    let message = fallback;
+    if (typeof errorObj === 'string') message = errorObj;
+    else if (errorObj?.message) message = Array.isArray(errorObj.message) ? errorObj.message[0] : errorObj.message;
+    toast.error(message);
+  };
+
+  // --- Handlers ---
+
+  const handleOpenCreate = () => {
+    setEditingId(null);
+    setForm({ firstName: '', lastName: '', email: '', password: '', role: 'STAFF' });
+    setIsFormModalOpen(true);
+  };
+
+  const handleOpenEdit = (user: any) => {
+    setEditingId(user.id);
+    setForm({
+      firstName: user.firstName || '',
+      lastName: user.lastName || '',
+      email: user.email || '',
+      password: '', // Leave password blank on edit unless they want to change it (depends on backend logic)
+      role: user.role || 'STAFF'
+    });
+    setIsFormModalOpen(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setActionLoading(true);
+    
     try {
-      await apiClient.createUser(data);
-      toast.success('User created successfully');
-      fetchUsers();
-      closeModal();
-    } catch (error: any) {
-      const msg = error?.response?.data?.message || 'Failed to create user';
-      toast.error(typeof msg === 'string' ? msg : 'Error creating user');
+      if (editingId) {
+        // When editing, do not send the password field if it is empty
+        const payload: any = { 
+          firstName: form.firstName,
+          lastName: form.lastName,
+          email: form.email,
+          role: form.role
+        };
+        if (form.password) payload.password = form.password;
+
+        await apiClient.updateUser(editingId, payload);
+        toast.success('User updated successfully');
+      } else {
+        // When creating, send all fields including password
+        await apiClient.createUser(form);
+        toast.success('User created successfully');
+      }
+      setIsFormModalOpen(false);
+      fetchData();
+    } catch (e: any) {
+      handleError(e, 'Failed to save user');
+    } finally {
+      setActionLoading(false);
     }
   };
 
-  const handleUpdateUser = async (data: Partial<User>) => {
-    if (!editingUser) return;
+  const handleToggleStatus = async (userId: string, isCurrentlyActive: boolean) => {
+    // Prevent locking yourself out
+    if (currentUserProfile?.id === userId) {
+      return toast.error("You cannot deactivate your own account.");
+    }
+
+    setActionLoading(true);
     try {
-      const payload = {
-        firstName: data.firstName,
-        lastName: data.lastName,
-        email: data.email,
-        role: data.role,
-        isActive: editingUser.isActive // Preserve status or allow update if added to form
-      };
-      
-      await apiClient.updateUser(editingUser.id, payload);
-      toast.success('User updated successfully');
-      fetchUsers();
-      closeModal();
-    } catch (error: any) {
-      const msg = error?.response?.data?.message || 'Failed to update user';
-      toast.error(typeof msg === 'string' ? msg : 'Error updating user');
+      await apiClient.toggleUserStatus(userId);
+      toast.success(`User ${isCurrentlyActive ? 'deactivated' : 'activated'} successfully`);
+      fetchData();
+    } catch (e: any) {
+      handleError(e, 'Failed to toggle user status');
+    } finally {
+      setActionLoading(false);
     }
   };
 
-  const handleDeleteUser = async (userId: string) => {
-    if (!confirm('Are you sure you want to delete this user?')) return;
+  const handleDelete = async (userId: string) => {
+    // Prevent deleting yourself
+    if (currentUserProfile?.id === userId) {
+      return toast.error("You cannot delete your own account.");
+    }
+
+    if (!window.confirm("Are you sure you want to permanently delete this user?")) return;
+    
+    setActionLoading(true);
     try {
       await apiClient.deleteUser(userId);
       toast.success('User deleted successfully');
-      fetchUsers();
-    } catch (error) {
-      toast.error('Failed to delete user');
+      fetchData();
+    } catch (e: any) {
+      handleError(e, 'Failed to delete user');
+    } finally {
+      setActionLoading(false);
     }
   };
 
-  const handleToggleStatus = async (userId: string) => {
-    try {
-      await apiClient.toggleUserStatus(userId);
-      toast.success('User status updated');
-      fetchUsers();
-    } catch (error) {
-      toast.error('Failed to update user status');
+  // --- UI Helpers ---
+  const getRoleBadge = (role: string) => {
+    switch(role) {
+      case 'PARTNER': return <span className="px-2.5 py-0.5 bg-indigo-100 text-indigo-800 text-[10px] uppercase font-bold rounded-md border border-indigo-200">Partner</span>;
+      case 'MANAGER': return <span className="px-2.5 py-0.5 bg-blue-100 text-blue-800 text-[10px] uppercase font-bold rounded-md border border-blue-200">Manager</span>;
+      case 'SENIOR': return <span className="px-2.5 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] uppercase font-bold rounded-md border border-emerald-200">Senior</span>;
+      default: return <span className="px-2.5 py-0.5 bg-slate-100 text-slate-700 text-[10px] uppercase font-bold rounded-md border border-slate-200">Staff</span>;
     }
   };
 
-  const openModal = (user?: User) => {
-    if (user) {
-      setEditingUser(user);
-      // Populate form with correct fields
-      reset({
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        role: user.role,
-      });
-    } else {
-      setEditingUser(null);
-      reset({
-        role: 'STAFF'
-      });
-    }
-    setIsModalOpen(true);
-  };
-
-  const closeModal = () => {
-    setIsModalOpen(false);
-    setEditingUser(null);
-    reset();
-  };
-
-  if (!canManageUsers) {
-    return (
-      <div className="flex flex-col items-center justify-center h-96 bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="h-16 w-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
-          <ShieldExclamationIcon className="h-8 w-8 text-red-600" />
-        </div>
-        <h2 className="text-xl font-bold text-gray-900">Access Denied</h2>
-        <p className="text-gray-500 mt-2 text-center max-w-md">
-          You do not have permission to view this page. Only Admins and Managers can access User Management.
-        </p>
-      </div>
-    );
-  }
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <LoadingSpinner size="lg" />
-      </div>
-    );
-  }
-
-  const safeUsers = Array.isArray(users) ? users : [];
-  
-  const filteredUsers = safeUsers.filter(user => {
-    const fullName = `${user.firstName || ''} ${user.lastName || ''} ${user.name || ''}`.toLowerCase();
-    return (
-      fullName.includes(searchTerm.toLowerCase()) ||
-      user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.role?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  });
-
-  const getRoleColor = (role: string) => {
-    switch (role?.toUpperCase()) {
-      case 'ADMIN': return 'bg-red-100 text-red-800';
-      case 'MANAGER': return 'bg-orange-100 text-orange-800';
-      case 'PARTNER': return 'bg-purple-100 text-purple-800';
-      case 'SENIOR': return 'bg-blue-100 text-blue-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  // Helper to check status (Backend returns boolean isActive)
-  const isUserActive = (user: User) => {
-    // Check strict boolean first
-    if (typeof user.isActive === 'boolean') return user.isActive;
-    // Fallback to string check if data is old/different
-    return user.status === 'active';
-  };
+  if (loading) return <div className="flex justify-center items-center h-[80vh]"><LoadingSpinner size="lg" /></div>;
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="space-y-6 animate-fade-in max-w-7xl mx-auto">
+      
+      {/* Header */}
+      <div className="flex justify-between items-center bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Users</h1>
-          <p className="text-gray-600">Manage your team members and their permissions</p>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Firm Users</h1>
+          <p className="text-slate-500 mt-1">Manage employee access, roles, and account statuses.</p>
         </div>
-        <button onClick={() => openModal()} className="btn-primary">
-          <PlusIcon className="h-5 w-5 mr-2" />
-          Add User
-        </button>
+        <RoleGuard minRole="MANAGER">
+          <button 
+            onClick={handleOpenCreate}
+            className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg font-bold hover:bg-indigo-700 shadow-sm flex items-center transition-colors"
+          >
+            <PlusIcon className="w-5 h-5 mr-2" /> Add User
+          </button>
+        </RoleGuard>
       </div>
 
-      <div className="relative">
-        <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-        <input
-          type="text"
-          placeholder="Search users..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="input pl-10 w-full"
-        />
-      </div>
-
-      {filteredUsers.length === 0 ? (
-        <EmptyState
-          title="No users found"
-          description="Get started by adding your first team member."
-          actionLabel="Add User"
-          onAction={() => openModal()}
-        />
-      ) : (
-        <div className="card p-0 overflow-hidden">
+      {/* Data Table */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        {users.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center">
+            <UsersIcon className="w-16 h-16 text-slate-300 mb-4" />
+            <h3 className="text-lg font-bold text-slate-700">No Users Found</h3>
+            <p className="text-slate-500 text-sm mt-1 max-w-sm">No users are currently registered in the system.</p>
+          </div>
+        ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+            <table className="min-w-full divide-y divide-slate-200">
+              <thead className="bg-slate-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">User</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Role</th>
+                  <th className="px-6 py-4 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Last Login</th>
+                  <th className="px-6 py-4 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredUsers.map((user) => (
-                  <tr key={user.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
+              <tbody className="bg-white divide-y divide-slate-100">
+                {users.map((user) => (
+                  <tr key={user.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-6 py-4">
                       <div className="flex items-center">
-                        <div className="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center flex-shrink-0">
-                          <span className="text-primary-700 font-semibold text-sm">
-                            {(user.firstName?.[0] || user.name?.[0] || '?').toUpperCase()}
-                            {(user.lastName?.[0] || '').toUpperCase()}
-                          </span>
+                        <div className="h-9 w-9 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm mr-3 shrink-0">
+                          {user.firstName?.charAt(0)}{user.lastName?.charAt(0)}
                         </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">
-                            {user.firstName ? `${user.firstName} ${user.lastName}` : user.name}
-                          </div>
-                          <div className="text-sm text-gray-500">{user.email}</div>
+                        <div>
+                          <div className="text-sm font-bold text-slate-900">{user.firstName} {user.lastName} {currentUserProfile?.id === user.id && <span className="ml-2 text-[10px] text-indigo-600 font-bold bg-indigo-50 px-1.5 py-0.5 rounded">(You)</span>}</div>
+                          <div className="text-xs text-slate-500 mt-0.5">{user.email}</div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoleColor(user.role ?? '')}`}>
-                        {user.role}
-                      </span>
+                    <td className="px-6 py-4">
+                      {getRoleBadge(user.role)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <button
-                        onClick={() => handleToggleStatus(user.id)}
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium cursor-pointer transition-colors ${
-                          isUserActive(user) 
-                            ? 'bg-green-100 text-green-800 hover:bg-green-200' 
-                            : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-                        }`}
-                      >
-                       {isUserActive(user) ? 'Active' : 'Inactive'}
-                      </button>
+                    <td className="px-6 py-4 text-center">
+                      {user.isActive ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-800 uppercase">
+                          Active
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 uppercase">
+                          Inactive
+                        </span>
+                      )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
+                    <td className="px-6 py-4 text-sm text-slate-500">
+                      {user.lastLogin ? new Date(user.lastLogin).toLocaleString() : 'Never'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex justify-end space-x-2">
-                        <button onClick={() => openModal(user)} className="text-blue-600 hover:text-blue-900 p-1 hover:bg-blue-50 rounded">
-                          <PencilIcon className="h-4 w-4" />
+                    <td className="px-6 py-4 text-right space-x-2">
+                      <RoleGuard minRole="MANAGER">
+                        <button 
+                          onClick={() => handleToggleStatus(user.id, user.isActive)} 
+                          disabled={actionLoading || currentUserProfile?.id === user.id}
+                          className={`p-1.5 rounded-lg transition-colors inline-block ${user.isActive ? 'text-amber-500 hover:bg-amber-50' : 'text-green-500 hover:bg-green-50'} disabled:opacity-30`}
+                          title={user.isActive ? "Deactivate Account" : "Activate Account"}
+                        >
+                          {user.isActive ? <NoSymbolIcon className="w-5 h-5" /> : <CheckCircleIcon className="w-5 h-5" />}
                         </button>
-                        <button onClick={() => handleDeleteUser(user.id)} className="text-red-600 hover:text-red-900 p-1 hover:bg-red-50 rounded">
-                          <TrashIcon className="h-4 w-4" />
+                        <button 
+                          onClick={() => handleOpenEdit(user)} 
+                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors inline-block"
+                          title="Edit"
+                        >
+                          <PencilSquareIcon className="w-5 h-5" />
                         </button>
-                      </div>
+                        <button 
+                          onClick={() => handleDelete(user.id)} 
+                          disabled={actionLoading || currentUserProfile?.id === user.id}
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors inline-block disabled:opacity-30"
+                          title="Delete"
+                        >
+                          <TrashIcon className="w-5 h-5" />
+                        </button>
+                      </RoleGuard>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* Modal */}
-      <Transition appear show={isModalOpen} as={Fragment}>
-        <Dialog as="div" className="relative z-10" onClose={closeModal}>
-          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" />
+      {/* ========================================== */}
+      {/* CREATE / EDIT MODAL */}
+      {/* ========================================== */}
+      <Transition appear show={isFormModalOpen} as={Fragment}>
+        <Dialog as="div" className="relative z-50" onClose={() => setIsFormModalOpen(false)}>
+          <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0">
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" />
+          </Transition.Child>
+
           <div className="fixed inset-0 overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4 text-center">
-              <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
-                <Dialog.Title as="h3" className="text-lg font-medium leading-6 text-gray-900 mb-4">
-                  {editingUser ? 'Edit User' : 'Add New User'}
-                </Dialog.Title>
-                <form onSubmit={handleSubmit(editingUser ? handleUpdateUser : handleCreateUser)} className="space-y-4">
+            <div className="flex min-h-full items-center justify-center p-4">
+              <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100" leave="ease-in duration-200" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95">
+                <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
+                  <Dialog.Title as="h3" className="text-lg font-bold leading-6 text-slate-900 mb-4 border-b border-slate-100 pb-3">
+                    {editingId ? 'Edit User' : 'Create New User'}
+                  </Dialog.Title>
                   
-                  {/* Split Name Fields */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="label">First Name</label>
-                      <input 
-                        {...register('firstName', { required: 'First Name is required' })} 
-                        type="text" 
-                        className="input" 
-                        placeholder="John" 
-                      />
-                      {errors.firstName && <p className="text-error">{errors.firstName.message}</p>}
+                  <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-1">First Name *</label>
+                        <input required type="text" className="w-full border-slate-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-indigo-500" value={form.firstName} onChange={e => setForm({...form, firstName: e.target.value})} placeholder="e.g. Jane" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-1">Last Name *</label>
+                        <input required type="text" className="w-full border-slate-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-indigo-500" value={form.lastName} onChange={e => setForm({...form, lastName: e.target.value})} placeholder="e.g. Doe" />
+                      </div>
                     </div>
+
                     <div>
-                      <label className="label">Last Name</label>
-                      <input 
-                        {...register('lastName', { required: 'Last Name is required' })} 
-                        type="text" 
-                        className="input" 
-                        placeholder="Doe" 
-                      />
-                      {errors.lastName && <p className="text-error">{errors.lastName.message}</p>}
+                      <label className="block text-sm font-bold text-slate-700 mb-1">Email Address *</label>
+                      <input required type="email" className="w-full border-slate-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-indigo-500" value={form.email} onChange={e => setForm({...form, email: e.target.value})} placeholder="e.g. jane@firm.com" />
                     </div>
-                  </div>
 
-                  <div>
-                    <label className="label">Email</label>
-                    <input 
-                      {...register('email', { 
-                        required: 'Email is required', 
-                        pattern: { value: /^\S+@\S+$/i, message: 'Invalid email address' } 
-                      })} 
-                      type="email" 
-                      className="input" 
-                      placeholder="john@example.com" 
-                    />
-                    {errors.email && <p className="text-error">{errors.email.message}</p>}
-                  </div>
-
-                  <div>
-                    <label className="label">Role</label>
-                    <select {...register('role', { required: 'Role is required' })} className="input">
-                      <option value="STAFF">Staff</option>
-                      <option value="SENIOR">Senior</option>
-                      <option value="MANAGER">Manager</option>
-                      <option value="PARTNER">Partner</option>
-                      <option value="ADMIN">Admin</option>
-                    </select>
-                    {errors.role && <p className="text-error">{errors.role.message}</p>}
-                  </div>
-
-                  {!editingUser && (
                     <div>
-                      <label className="label">Password</label>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">System Role *</label>
+                      <select required className="w-full border-slate-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-indigo-500" value={form.role} onChange={e => setForm({...form, role: e.target.value})}>
+                        <option value="PARTNER">Partner</option>
+                        <option value="MANAGER">Manager</option>
+                        <option value="SENIOR">Senior</option>
+                        <option value="STAFF">Staff</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">
+                        {editingId ? 'Password (leave blank to keep current)' : 'Initial Password *'}
+                      </label>
                       <input 
-                        {...register('password', { 
-                          required: 'Password is required', 
-                          minLength: { value: 6, message: 'Min 6 characters' } 
-                        })} 
+                        required={!editingId} 
                         type="password" 
-                        className="input" 
-                        placeholder="••••••" 
+                        className="w-full border-slate-300 rounded-lg shadow-sm focus:border-indigo-500 focus:ring-indigo-500" 
+                        value={form.password} 
+                        onChange={e => setForm({...form, password: e.target.value})} 
+                        placeholder={editingId ? '••••••••' : 'Enter strong password'} 
                       />
-                      {errors.password && <p className="text-error">{errors.password.message}</p>}
                     </div>
-                  )}
 
-                  <div className="flex justify-end space-x-3 pt-4">
-                    <button type="button" onClick={closeModal} className="btn-secondary">Cancel</button>
-                    <button type="submit" className="btn-primary">{editingUser ? 'Update' : 'Create'}</button>
-                  </div>
-                </form>
-              </Dialog.Panel>
+                    <div className="mt-6 flex justify-end space-x-3 pt-4 border-t border-slate-100">
+                      <button type="button" onClick={() => setIsFormModalOpen(false)} className="px-4 py-2 bg-white border border-slate-300 rounded-lg font-bold text-slate-700 hover:bg-slate-50">Cancel</button>
+                      <button type="submit" disabled={actionLoading} className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold shadow-sm hover:bg-indigo-700 disabled:opacity-50">
+                        {editingId ? 'Save Changes' : 'Create User'}
+                      </button>
+                    </div>
+                  </form>
+                </Dialog.Panel>
+              </Transition.Child>
             </div>
           </div>
         </Dialog>
       </Transition>
+
     </div>
   );
 };

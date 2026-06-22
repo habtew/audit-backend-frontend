@@ -1,62 +1,6 @@
+// src/utils/api.ts
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
-import { 
-  ApiResponse, 
-  LoginSuccessData, 
-  LoginCredentials, 
-  RegisterData, 
-  User, 
-  Client, 
-  Engagement, 
-  EngagementResponse, 
-  EngagementTeamUser,
-  AssignUserDto,
-  RiskAssessment, 
-  DashboardOverview, 
-  DashboardActivity, 
-  DashboardDeadlines, 
-  DashboardKPIs, 
-  DashboardWorkload,
-  Entity, 
-  Workpaper,
-  RiskMatrix,
-  RiskReport,
-  EngagementAnalytics, 
-  UserPerformanceMetric, 
-  RiskAnalytics, 
-  BillingAnalytics,
-  ReportTemplate, 
-  AuditLog, 
-  UserAccessLog,
-  TrialBalance,
-  TrialBalanceAccount,
-  ImportTrialBalancePayload,
-  ManualTrialBalancePayload,
-  UpdateAccountPayload,
-  AdjustmentPayload,
-  ComparisonResult,
-  ImportHistory,
-  ValidationResult,
-  Invoice,
-  CreateInvoicePayload,
-  BillableHour,
-  CreateTimeEntryPayload,
-  EngagementProgress,
-  PBCRequest,
-  CreatePBCRequestDto,
-  UpdatePBCRequestDto,
-  PBCStatus,
-  SuccessResponse,
-  AnalyticsDateParams,
-  TrialBalanceSummaryData,
-  // NEW TYPES
-  PreEngagement,
-  Materiality,
-  AuditStrategy,
-  PlanningRisk,
-  FraudBrainstorming,
-  ClientResponse,
-  UserResponse
-} from '../types';
+import * as Types from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
 
@@ -73,20 +17,16 @@ class ApiClient {
   }
 
   private setupInterceptors() {
-    this.client.interceptors.request.use(
-      (config) => {
-        const token = localStorage.getItem('token');
-        if (token) config.headers.Authorization = `Bearer ${token}`;
-        return config;
-      },
-      (error) => Promise.reject(error)
-    );
+    this.client.interceptors.request.use((config) => {
+      const token = localStorage.getItem('token');
+      if (token) config.headers.Authorization = `Bearer ${token}`;
+      return config;
+    });
 
     this.client.interceptors.response.use(
       (response: AxiosResponse) => response,
       async (error) => {
         if (error.response?.status === 401 && !error.config._retry) {
-          error.config._retry = true;
           localStorage.removeItem('token');
           window.location.href = '/login';
         }
@@ -96,448 +36,301 @@ class ApiClient {
   }
 
   // Generic Helpers
-  async get<T>(url: string, params?: any): Promise<T> {
-    const response = await this.client.get<T>(url, { params });
-    return response.data;
-  }
-  async post<T>(url: string, data?: any, config?: any): Promise<T> {
-    const response = await this.client.post<T>(url, data, config);
-    return response.data;
-  }
-  async put<T>(url: string, data?: any): Promise<T> {
-    const response = await this.client.put<T>(url, data);
-    return response.data;
-  }
-  async patch<T>(url: string, data?: any): Promise<T> {
-    const response = await this.client.patch<T>(url, data);
-    return response.data;
-  }
-  async delete<T>(url: string): Promise<T> {
-    const response = await this.client.delete<T>(url);
-    return response.data;
-  }
+  // Generic Helpers
+async get<T>(url: string, params?: any, config?: any): Promise<T> {
+  return (await this.client.get<T>(url, { params, ...config })).data;
+}
 
-  // 🔐 Auth
-  async login(credentials: LoginCredentials): Promise<ApiResponse<LoginSuccessData>> {
-    return this.post<ApiResponse<LoginSuccessData>>('/auth/login', credentials);
-  }
-  async register(data: RegisterData): Promise<ApiResponse<LoginSuccessData>> {
-    return this.post<ApiResponse<LoginSuccessData>>('/auth/register', data);
-  }
-  async getUserProfile(): Promise<ApiResponse<User>> {
-    return this.get<ApiResponse<User>>('/users/profile');
-  }
+async post<T>(url: string, data?: any, config?: any): Promise<T> {
+  return (await this.client.post<T>(url, data, config)).data;
+}
 
-  // 📋 PHASE 1: PRE-ENGAGEMENT
-  async createPreEngagement(data: any): Promise<ApiResponse<PreEngagement>> {
-    return this.post<ApiResponse<PreEngagement>>('/pre-engagements', data);
-  }
-  async getPreEngagement(id: string): Promise<ApiResponse<PreEngagement>> {
-    return this.get<ApiResponse<PreEngagement>>(`/pre-engagements/${id}`);
-  }
-  async declareIndependence(id: string, data: any): Promise<ApiResponse<any>> {
-    return this.post<ApiResponse<any>>(`/pre-engagements/${id}/independence`, data);
-  }
-  async patchPreEngagementAssessment(id: string, data: any): Promise<ApiResponse<PreEngagement>> {
-    return this.patch<ApiResponse<PreEngagement>>(`/pre-engagements/${id}/assessment`, data);
-  }
-  async updatePreEngagementTerms(id: string, data: any): Promise<ApiResponse<PreEngagement>> {
-    return this.patch<ApiResponse<PreEngagement>>(`/pre-engagements/${id}/terms`, data);
-  }
-  async reviewPreEngagement(id: string, status: string): Promise<ApiResponse<PreEngagement>> {
-    return this.patch<ApiResponse<PreEngagement>>(`/pre-engagements/${id}/review`, { status });
-  }
+async put<T>(url: string, data?: any, config?: any): Promise<T> {
+  return (await this.client.put<T>(url, data, config)).data;
+}
 
-  // 🏗️ PHASE 2: PLANNING
-  // Materiality
-  async saveMateriality(data: any): Promise<ApiResponse<Materiality>> {
-    return this.post<ApiResponse<Materiality>>('/planning/materiality', data);
-  }
-  async getMateriality(engagementId: string): Promise<ApiResponse<Materiality>> {
-    // Backend: @Get('materiality/:id')
-    return this.get<ApiResponse<Materiality>>(`/planning/materiality/${engagementId}`);
-  }
-  async approveMateriality(engagementId: string): Promise<ApiResponse<Materiality>> {
-    return this.patch<ApiResponse<Materiality>>(`/planning/materiality/${engagementId}/approve`, {});
-  }
+async patch<T>(url: string, data?: any, config?: any): Promise<T> {
+  return (await this.client.patch<T>(url, data, config)).data;
+}
 
-  // Strategy
-  async saveStrategy(data: any): Promise<ApiResponse<AuditStrategy>> {
-    return this.post<ApiResponse<AuditStrategy>>('/planning/strategy', data);
-  }
-  async getStrategy(engagementId: string): Promise<ApiResponse<AuditStrategy>> {
-    // Backend: @Get('strategy/:id')
-    return this.get<ApiResponse<AuditStrategy>>(`/planning/strategy/${engagementId}`);
-  }
-  async approveStrategy(engagementId: string): Promise<ApiResponse<AuditStrategy>> {
-    return this.patch<ApiResponse<AuditStrategy>>(`/planning/strategy/${engagementId}/approve`, {});
-  }
+async delete<T>(url: string, config?: any): Promise<T> {
+  return (await this.client.delete<T>(url, config)).data;
+}
 
-  // Risks
-  async addPlanningRisk(data: any): Promise<ApiResponse<PlanningRisk>> {
-    return this.post<ApiResponse<PlanningRisk>>('/planning/risks', data);
-  }
-  async getPlanningRisks(engagementId: string): Promise<ApiResponse<PlanningRisk[]>> {
-    // Backend: @Get('risks/:id')
-    return this.get<ApiResponse<PlanningRisk[]>>(`/planning/risks/${engagementId}`);
-  }
-  async approveRiskRegister(engagementId: string): Promise<ApiResponse<any>> {
-    return this.patch<ApiResponse<any>>(`/planning/risks/${engagementId}/approve`, {});
-  }
 
-  // Fraud
-  async saveFraudBrainstorming(data: any): Promise<ApiResponse<FraudBrainstorming>> {
-    return this.post<ApiResponse<FraudBrainstorming>>('/planning/fraud', data);
-  }
-  async getFraudBrainstorming(engagementId: string): Promise<ApiResponse<FraudBrainstorming>> {
-    // Backend: @Get('fraud/:id')
-    return this.get<ApiResponse<FraudBrainstorming>>(`/planning/fraud/${engagementId}`);
-  }
-  async approveFraudBrainstorming(engagementId: string): Promise<ApiResponse<FraudBrainstorming>> {
-    return this.patch<ApiResponse<FraudBrainstorming>>(`/planning/fraud/${engagementId}/approve`, {});
-  }
-
-  // Complete Planning Phase
-  async completePlanningPhase(engagementId: string): Promise<ApiResponse<{ status: string }>> {
-    return this.post<ApiResponse<{ status: string }>>(`/planning/${engagementId}/complete`, {});
-  }
-
-  // 📊 ENGAGEMENTS
-  async getEngagements(params?: any): Promise<ApiResponse<EngagementResponse>> {
-    return this.get<ApiResponse<EngagementResponse>>('/engagements', params);
-  }
-  async getEngagementById(id: string): Promise<ApiResponse<Engagement>> {
-    return this.get<ApiResponse<Engagement>>(`/engagements/${id}`);
-  }
-  async createEngagement(data: Partial<Engagement>): Promise<ApiResponse<Engagement>> {
-    return this.post<ApiResponse<Engagement>>('/engagements', data);
-  }
-  async updateEngagement(id: string, data: Partial<Engagement>): Promise<ApiResponse<Engagement>> {
-    return this.put<ApiResponse<Engagement>>(`/engagements/${id}`, data);
-  }
-  async deleteEngagement(id: string): Promise<ApiResponse<SuccessResponse>> { 
-    return this.delete<ApiResponse<SuccessResponse>>(`/engagements/${id}`);
-  }
-  async assignUserToEngagement(id: string, data: AssignUserDto): Promise<ApiResponse<EngagementTeamUser>> { 
-    return this.post<ApiResponse<EngagementTeamUser>>(`/engagements/${id}/assign-user`, data);
-  }
-  async removeUserFromEngagement(id: string, userId: string): Promise<ApiResponse<SuccessResponse>> {
-    return this.delete<ApiResponse<SuccessResponse>>(`/engagements/${id}/users/${userId}`);
-  }
-  async getEngagementTeam(id: string): Promise<ApiResponse<EngagementTeamUser[]>> {
-    return this.get<ApiResponse<EngagementTeamUser[]>>(`/engagements/${id}/team`);
-  }
-  async updateEngagementStatus(id: string, status: string): Promise<ApiResponse<Engagement>> {
-    return this.put<ApiResponse<Engagement>>(`/engagements/${id}/status`, { status });
-  }
-
-  // 🧑‍💼 Clients
-  async getClients(params?: any): Promise<ApiResponse<ClientResponse>> {
-    return this.get<ApiResponse<ClientResponse>>('/clients', params);
-  }
-  async createClient(data: Partial<Client>): Promise<ApiResponse<Client>> {
-    return this.post<ApiResponse<Client>>('/clients', data);
-  }
-  async updateClient(id: string, data: Partial<Client>): Promise<ApiResponse<Client>> {
-    return this.put<ApiResponse<Client>>(`/clients/${id}`, data);
-  }
-  async deleteClient(id: string): Promise<ApiResponse<{ success: boolean }>> {
-    return this.delete<ApiResponse<{ success: boolean }>>(`/clients/${id}`);
-  }
-  async getClientEngagements(clientId: string): Promise<ApiResponse<Engagement[]>> {
-    return this.get<ApiResponse<Engagement[]>>(`/clients/${clientId}/engagements`);
-  }
-
-  // 👤 Users
-  async getUsers(params?: any): Promise<ApiResponse<UserResponse>> {
-    return this.get<ApiResponse<UserResponse>>('/users', params);
-  }
-  async createUser(data: Partial<User>): Promise<ApiResponse<User>> {
-    return this.post<ApiResponse<User>>('/users', data);
-  }
-  async updateUser(id: string, data: Partial<User>): Promise<ApiResponse<User>> {
-    return this.put<ApiResponse<User>>(`/users/${id}`, data);
-  }
-  async deleteUser(id: string): Promise<ApiResponse<{ success: boolean }>> {
-    return this.delete<ApiResponse<{ success: boolean }>>(`/users/${id}`);
-  }
-  async toggleUserStatus(id: string): Promise<ApiResponse<User>> {
-    return this.put<ApiResponse<User>>(`/users/${id}/toggle-status`, {});
-  }
-
-  // 🏛️ ENTITIES
-  async getEntities(params?: any): Promise<ApiResponse<Entity[]>> {
-    return this.get<ApiResponse<Entity[]>>('/entities', params);
-  }
-  async createEntity(data: Partial<Entity>): Promise<ApiResponse<Entity>> {
-    return this.post<ApiResponse<Entity>>('/entities', data);
-  }
-  async getEntityById(id: string): Promise<ApiResponse<Entity>> {
-    return this.get<ApiResponse<Entity>>(`/entities/${id}`);
-  }
-  async updateEntity(id: string, data: Partial<Entity>): Promise<ApiResponse<Entity>> {
-    return this.put<ApiResponse<Entity>>(`/entities/${id}`, data);
-  }
-  async deleteEntity(id: string): Promise<ApiResponse<SuccessResponse>> {
-    return this.delete<ApiResponse<SuccessResponse>>(`/entities/${id}`);
-  }
-  async getEntitiesByClient(clientId: string): Promise<ApiResponse<Entity[]>> {
-    return this.get<ApiResponse<Entity[]>>(`/entities/client/${clientId}`);
-  }
-  async getEntityEngagements(id: string): Promise<ApiResponse<Engagement[]>> {
-    return this.get<ApiResponse<Engagement[]>>(`/entities/${id}/engagements`);
-  }
-
-  // 📂 WORKPAPERS
-  async getWorkpapers(params?: any): Promise<ApiResponse<Workpaper[]>> {
-    return this.get<ApiResponse<Workpaper[]>>('/workpapers', params);
-  }
-  async createWorkpaper(data: any): Promise<ApiResponse<Workpaper>> {
-    return this.post<ApiResponse<Workpaper>>('/workpapers', data);
-  }
-  async getWorkpaperById(id: string): Promise<ApiResponse<Workpaper>> {
-    return this.get<ApiResponse<Workpaper>>(`/workpapers/${id}`);
-  }
-  async updateWorkpaper(id: string, data: any): Promise<ApiResponse<Workpaper>> {
-    return this.put<ApiResponse<Workpaper>>(`/workpapers/${id}`, data);
-  }
-  async deleteWorkpaper(id: string): Promise<ApiResponse<{ message: string }>> {
-    return this.delete<ApiResponse<{ message: string }>>(`/workpapers/${id}`);
-  }
-  async uploadWorkpaperDocument(id: string, file: File): Promise<ApiResponse<any>> {
-    const formData = new FormData();
-    formData.append('file', file);
-    return this.post<ApiResponse<any>>(`/workpapers/${id}/documents`, formData);
-  }
-  async reviewWorkpaper(id: string, data: { status: string; notes?: string }): Promise<ApiResponse<Workpaper>> {
-    return this.put<ApiResponse<Workpaper>>(`/workpapers/${id}/review`, data);
-  }
-  async getWorkpaperTemplates(): Promise<ApiResponse<any[]>> {
-    return this.get<ApiResponse<any[]>>('/workpapers/templates/list');
-  }
-  async createWorkpaperFromTemplate(templateId: string, data: any): Promise<ApiResponse<Workpaper>> {
-    return this.post<ApiResponse<Workpaper>>(`/workpapers/templates/${templateId}`, data);
-  }
-
-  // ⚠️ Risk Assessment (Legacy/Other)
-  async getRiskAssessments(params?: any): Promise<ApiResponse<{ riskAssessments: RiskAssessment[]; pagination: any }>> {
-    return this.get<ApiResponse<{ riskAssessments: RiskAssessment[]; pagination: any }>>('/risk-assessments', params);
-  }
-  async getRiskAssessmentById(id: string): Promise<ApiResponse<RiskAssessment>> {
-    return this.get<ApiResponse<RiskAssessment>>(`/risk-assessments/${id}`);
-  }
-  async createRiskAssessment(data: Partial<RiskAssessment>): Promise<ApiResponse<RiskAssessment>> {
-    return this.post<ApiResponse<RiskAssessment>>('/risk-assessments', data);
-  }
-  async updateRiskAssessment(id: string, data: Partial<RiskAssessment>): Promise<ApiResponse<RiskAssessment>> {
-    return this.put<ApiResponse<RiskAssessment>>(`/risk-assessments/${id}`, data);
-  }
-  async deleteRiskAssessment(id: string): Promise<ApiResponse<{ message: string }>> {
-    return this.delete<ApiResponse<{ message: string }>>(`/risk-assessments/${id}`);
-  }
-  async getRiskMatrix(engagementId: string): Promise<ApiResponse<RiskMatrix>> {
-    return this.get<ApiResponse<RiskMatrix>>(`/risk-assessments/engagements/${engagementId}/matrix`);
-  }
-  async getRiskReport(engagementId: string): Promise<ApiResponse<RiskReport>> {
-    return this.get<ApiResponse<RiskReport>>(`/risk-assessments/engagements/${engagementId}/report`);
-  }
-
-  // ⚖️ Trial Balance
-  async getTrialBalances(params?: { engagementId?: string; page?: number; limit?: number }): Promise<ApiResponse<{ trialBalances: TrialBalance[]; pagination: any }>> {
-    return this.get<ApiResponse<{ trialBalances: TrialBalance[]; pagination: any }>>('/trial-balances', params);
-  }
-  async getTrialBalanceById(id: string): Promise<ApiResponse<TrialBalance>> {
-    return this.get<ApiResponse<TrialBalance>>(`/trial-balances/${id}`);
-  }
-  async deleteTrialBalance(id: string): Promise<ApiResponse<void>> {
-    return this.delete<ApiResponse<void>>(`/trial-balances/${id}`);
-  }
-  async createTrialBalance(data: ManualTrialBalancePayload): Promise<ApiResponse<TrialBalance>> {
-    return this.post<ApiResponse<TrialBalance>>('/trial-balances', data);
-  }
-  async importTrialBalance(data: ImportTrialBalancePayload): Promise<ApiResponse<TrialBalance>> {
-    const formData = new FormData();
-    formData.append('engagementId', data.engagementId);
-    formData.append('period', data.period);
-    if (data.description) formData.append('description', data.description);
-    formData.append('file', data.file);
-    return this.post<ApiResponse<TrialBalance>>('/data-import/trial-balance', formData);
-  }
-  async getTrialBalanceSummary(id: string): Promise<ApiResponse<{ trialBalance: Partial<TrialBalance>; summary: TrialBalanceSummaryData }>> {
-    return this.get(`/trial-balances/${id}/summary`);
-  }
-  async exportTrialBalance(id: string): Promise<ApiResponse<any>> {
-    return this.get(`/trial-balances/${id}/export`);
-  }
-  async updateTrialBalanceAccount(trialBalanceId: string, accountId: string, data: UpdateAccountPayload): Promise<ApiResponse<TrialBalanceAccount>> {
-    return this.put(`/trial-balances/${trialBalanceId}/accounts/${accountId}`, data);
-  }
-  async compareTrialBalances(currentId: string, previousId: string): Promise<ApiResponse<ComparisonResult[]>> {
-    return this.get(`/trial-balances/${currentId}/compare/${previousId}`);
-  }
-  async addAdjustment(trialBalanceId: string, accountId: string, data: AdjustmentPayload): Promise<ApiResponse<void>> {
-    return this.post(`/trial-balances/${trialBalanceId}/accounts/${accountId}/adjustments`, data);
-  }
-  async getImportHistory(engagementId: string): Promise<ApiResponse<ImportHistory[]>> {
-    return this.get<ApiResponse<ImportHistory[]>>(`/data-import/history?engagementId=${engagementId}`);
-  }
-  async validateImportFile(file: File): Promise<ApiResponse<ValidationResult>> {
-    const formData = new FormData();
-    formData.append('file', file);
-    return this.post<ApiResponse<ValidationResult>>('/data-import/validate', formData);
-  }
-  async getImportTemplate(type: string = 'trial-balance'): Promise<Blob> {
-    const response = await this.client.get(`/data-import/template/${type}`, {
-      responseType: 'blob',
-    });
-    return response.data;
-  }
-
-  // 💰 Billing
-  async getInvoices(params?: { page?: number; limit?: number; status?: string; clientId?: string }): Promise<ApiResponse<{ invoices: Invoice[]; pagination: any }>> {
-    return this.get<ApiResponse<{ invoices: Invoice[]; pagination: any }>>('/invoices', params);
-  }
-  async getInvoiceById(id: string): Promise<ApiResponse<Invoice>> {
-    return this.get<ApiResponse<Invoice>>(`/invoices/${id}`);
-  }
-  async createInvoice(data: CreateInvoicePayload): Promise<ApiResponse<Invoice>> {
-    return this.post<ApiResponse<Invoice>>('/invoices', data);
-  }
-  async generateInvoice(engagementId: string): Promise<ApiResponse<Invoice>> {
-    return this.post<ApiResponse<Invoice>>(`/invoices/generate/${engagementId}`);
-  }
-  async updateInvoice(id: string, data: any): Promise<ApiResponse<Invoice>> {
-    return this.put<ApiResponse<Invoice>>(`/invoices/${id}`, data);
-  }
-  async markInvoicePaid(id: string): Promise<ApiResponse<Invoice>> {
-    return this.put<ApiResponse<Invoice>>(`/invoices/${id}/pay`, {});
-  }
-  async sendInvoice(id: string): Promise<ApiResponse<{ message: string; sentTo: string }>> {
-    return this.post<ApiResponse<{ message: string; sentTo: string }>>(`/invoices/${id}/send`, {});
-  }
-  async deleteInvoice(id: string): Promise<ApiResponse<void>> {
-    return this.delete<ApiResponse<void>>(`/invoices/${id}`);
-  }
-  async getInvoicePreviewData(id: string): Promise<ApiResponse<{ invoice: Invoice; previewUrl: string }>> {
-    return this.get<ApiResponse<{ invoice: Invoice; previewUrl: string }>>(`/invoices/${id}/preview`);
-  }
-  async downloadInvoicePdf(id: string): Promise<Blob> {
-    const response = await this.client.get(`/invoices/${id}/pdf`, { responseType: 'blob' });
-    return response.data;
-  }
-  async getBillableHours(params?: { isBilled?: boolean; engagementId?: string }): Promise<ApiResponse<BillableHour[]>> {
-    return this.get<ApiResponse<BillableHour[]>>('/billable-hours', params);
-  }
-  async createTimeEntry(data: CreateTimeEntryPayload): Promise<ApiResponse<BillableHour>> {
-    return this.post<ApiResponse<BillableHour>>('/billable-hours', data);
-  }
-  async getUnbilledSummary(engagementId: string): Promise<ApiResponse<{ 
-    totalHours: number; 
-    unbilledAmount: number; 
-    totalBillableAmount: number; 
-  }>> {
-    const res = await this.get<ApiResponse<any>>('/billing/summary', { engagementId });
-    return { ...res, data: res.data.summary };
-  }
-  async getBillingSummary(params?: { engagementId?: string; userId?: string; startDate?: string; endDate?: string; }): Promise<ApiResponse<any>> {
-    return this.get('/billing/summary', params);
-  }
-
-  // 📊 Analytics
-  async getDashboardOverview(): Promise<ApiResponse<DashboardOverview>> {
-    return this.get<ApiResponse<DashboardOverview>>('/dashboard/overview');
-  }
-  async getRecentActivity(): Promise<ApiResponse<DashboardActivity[]>> {
-    return this.get<ApiResponse<DashboardActivity[]>>('/dashboard/activity', { limit: 10 });
-  }
-  async getUpcomingDeadlines(): Promise<ApiResponse<DashboardDeadlines>> {
-    return this.get<ApiResponse<DashboardDeadlines>>('/dashboard/deadlines');
-  }
-  async getKPIs(): Promise<ApiResponse<DashboardKPIs>> {
-    return this.get<ApiResponse<DashboardKPIs>>('/dashboard/kpis', { limit: 10 });
-  }
-  async getEngagementStatus(): Promise<ApiResponse<Record<string, number>>> {
-     return this.get<ApiResponse<Record<string, number>>>('/dashboard/engagement-status');
-  }
-  async getWorkload(): Promise<ApiResponse<DashboardWorkload[]>> {
-    return this.get<ApiResponse<DashboardWorkload[]>>('/dashboard/workload');
-  }
-  async getRiskAnalytics(params?: AnalyticsDateParams): Promise<ApiResponse<RiskAnalytics>> {
-    return this.get<ApiResponse<RiskAnalytics>>('/analytics/risk', params);
-  }
-  async getEngagementAnalytics(params?: AnalyticsDateParams): Promise<ApiResponse<EngagementAnalytics>> {
-    return this.get<ApiResponse<EngagementAnalytics>>('/analytics/engagements', params);
-  }
-  async getUserPerformance(params?: AnalyticsDateParams): Promise<ApiResponse<UserPerformanceMetric[]>> {
-    return this.get<ApiResponse<UserPerformanceMetric[]>>('/analytics/users/performance', params);
-  }
-  async getBillingAnalytics(params?: AnalyticsDateParams): Promise<ApiResponse<BillingAnalytics>> {
-    return this.get<ApiResponse<BillingAnalytics>>('/analytics/billing/hours', params);
-  }
-  async getEngagementProgress(id: string): Promise<ApiResponse<EngagementProgress>> {
-    return this.get<ApiResponse<EngagementProgress>>(`/analytics/engagements/${id}/progress`);
-  }
-
-  // 📄 Reports
-  async getReportTemplates(): Promise<ApiResponse<ReportTemplate[]>> {
-    return this.get<ApiResponse<ReportTemplate[]>>('/reports/templates');
-  }
-  async generateReport(templateId: string, params: any): Promise<ApiResponse<any>> {
-    const { engagementId, ...dto } = params;
-    switch (templateId) {
-      case 'engagement-summary':
-        if (!engagementId) throw new Error('Engagement ID is required');
-        return this.post(`/reports/engagement/${engagementId}`, dto);
-      case 'financial-dashboard':
-        return this.post('/reports/financial-summary', dto);
-      case 'utilization-analysis':
-        return this.post('/reports/utilization', dto);
-      default:
-        return this.post(`/reports/generate/${templateId}`, params);
+  async uploadFile(data: FormData) {
+  const response = await this.client.post('/files/upload', data, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
     }
+  });
+
+  return response.data;
+}
+  // ==========================================
+  // 0. CORE & FIRM OPERATIONS
+  // ==========================================
+  async login(credentials: any) { return this.post<Types.ApiResponse<any>>('/auth/login', credentials); }
+  
+  // Dashboard Endpoints
+  async getDashboardOverview() { return this.get<Types.ApiResponse<Types.DashboardOverview>>('/dashboard/overview'); }
+  async getRecentActivity() { return this.get<Types.ApiResponse<Types.DashboardActivity[]>>('/dashboard/activity'); }
+  async getUpcomingDeadlines() { return this.get<Types.ApiResponse<{ engagements: Types.DashboardDeadline[], pbcRequests: any[] }>>('/dashboard/deadlines'); }
+  async getWorkload() { return this.get<Types.ApiResponse<Types.DashboardWorkload[]>>('/dashboard/workload'); }
+  async getKPIs() { return this.get<Types.ApiResponse<Types.DashboardKPIs>>('/dashboard/kpis'); }
+  async getEngagementStatus() { return this.get<Types.ApiResponse<Record<string, number>>>('/dashboard/engagement-status'); }
+
+  // Analytics Endpoints
+  async getAnalyticsEngagements() { return this.get<Types.ApiResponse<Types.AnalyticsEngagements>>('/analytics/engagements'); }
+  async getAnalyticsUserPerformance() { return this.get<Types.ApiResponse<any[]>>('/analytics/users/performance'); }
+  async getAnalyticsBillingHours() { return this.get<Types.ApiResponse<Types.AnalyticsBillingHours>>('/analytics/billing/hours'); }
+  async getAnalyticsRisk() { return this.get<Types.ApiResponse<Types.AnalyticsRisk>>('/analytics/risk'); }
+  async getAnalyticsPartnerDashboard() { return this.get<Types.ApiResponse<Types.AnalyticsPartnerDashboard>>('/analytics/partner-dashboard'); }
+  async getAnalyticsEngagementProgress(engagementId: string) { return this.get<Types.ApiResponse<Types.AnalyticsEngagementProgress>>(`/analytics/engagements/${engagementId}/progress`); }
+
+  // Clients & Contacts
+  async getClients() { return this.get<Types.ApiResponse<{ clients: Types.Client[] }>>('/clients'); }
+  async createClient(data: any) { return this.post<Types.ApiResponse<Types.Client>>('/clients', data); }
+  async addClientContact(clientId: string, data: any) { return this.post<Types.ApiResponse<Types.ClientContact>>(`/clients/${clientId}/contacts`, data); }
+
+  // Engagements
+  async getEngagements() { return this.get<Types.ApiResponse<{ engagements: Types.Engagement[] }>>('/engagements'); }
+  async getEngagementById(id: string) { return this.get<Types.ApiResponse<Types.Engagement>>(`/engagements/${id}`); }
+
+  // ==========================================
+  // 1. PRE-ENGAGEMENT PHASE
+  // ==========================================
+  async initiatePreEngagement(data: any) { return this.post<Types.ApiResponse<Types.PreEngagement>>('/pre-engagements', data); }
+  async submitIndependence(preId: string, data: any) { return this.post<Types.ApiResponse<Types.IndependenceDeclaration>>(`/pre-engagements/${preId}/independence`, data); }
+  async updateComplianceCheck(preId: string, data: any) { return this.patch<Types.ApiResponse<Types.ComplianceCheck>>(`/pre-engagements/${preId}/compliance-check`, data); }
+  async updateTerms(preId: string, data: any) { 
+    return this.patch<Types.ApiResponse<any>>(`/pre-engagements/${preId}/terms`, data); 
   }
-  async exportReport(reportId: string): Promise<ApiResponse<{ downloadUrl: string }>> {
-    return this.post(`/reports/export/${reportId}`, {});
+  async signOffPreEngagement(preId: string, data: any) { return this.post<Types.ApiResponse<any>>(`/pre-engagements/${preId}/sign-off`, data); }
+  async getPreEngagements() { return this.get<Types.ApiResponse<any[]>>('/pre-engagements'); }
+  async getPreEngagementById(preId: string) { return this.get<Types.ApiResponse<any>>(`/pre-engagements/${preId}`); }
+ // ==========================================
+  // 2. PLANNING & RISK PHASE
+  // ==========================================
+  async getPlanningDashboard(engagementId: string) { return this.get<Types.ApiResponse<any>>(`/planning/${engagementId}/dashboard`); }
+  
+  // Entity & Special Considerations
+  async updateEntityUnderstanding(engagementId: string, data: any) { return this.patch<Types.ApiResponse<any>>(`/planning/${engagementId}/entity-understanding`, data); }
+  async updateSpecialConsiderations(engagementId: string, data: any) { return this.patch<Types.ApiResponse<any>>(`/planning/${engagementId}/special-considerations`, data); }
+  
+  // Materiality
+  async createMateriality(data: any) { return this.post<Types.ApiResponse<any>>('/planning/materiality', data); }
+  async approveMateriality(engagementId: string, data: any) { return this.patch<Types.ApiResponse<any>>(`/planning/materiality/${engagementId}/approve`, data); }
+  
+  // Fraud
+  async submitFraudBrainstorming(data: any) { return this.post<Types.ApiResponse<any>>('/planning/fraud', data); }
+  async approveFraudBrainstorming(engagementId: string, data: any) { return this.patch<Types.ApiResponse<any>>(`/planning/fraud/${engagementId}/approve`, data); }
+  
+  // Strategy
+  async createAuditStrategy(data: any) { return this.post<Types.ApiResponse<any>>('/planning/strategy', data); }
+  async approveAuditStrategy(engagementId: string, data: any) { return this.patch<Types.ApiResponse<any>>(`/planning/strategy/${engagementId}/approve`, data); }
+  
+  // Risks
+  async createPlanningRisk(data: any) { return this.post<Types.ApiResponse<any>>('/planning/risks', data); }
+  async approvePlanningRisk(engagementId: string, data: any) { return this.patch<Types.ApiResponse<any>>(`/planning/risks/${engagementId}/approve`, data); } // Assuming this exists based on your prompt sequence
+  async approveRiskRegister(
+  engagementId: string
+) {
+  return this.patch(
+    `/planning/risks/${engagementId}/approve`
+  );
+}
+  // Complete Phase
+  async completePlanning(engagementId: string) { return this.post<Types.ApiResponse<any>>(`/planning/${engagementId}/complete`); }
+
+  // ==========================================
+  // 3. DATA ACQUISITION & TRIAL BALANCE
+  // ==========================================
+  // Imports & History
+  async importTrialBalance(data: FormData) { 
+    return this.post<Types.ApiResponse<any>>('/data-import/trial-balance', data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      transformRequest: [(d) => d] 
+    }); 
   }
-  async downloadReportFile(path: string): Promise<Blob> {
-    const response = await this.client.get(path, { responseType: 'blob' });
-    return response.data;
+  async importLedger(engagementId: string, data: FormData) { 
+    return this.post<Types.ApiResponse<any>>(`/data-import/${engagementId}/ledger`, data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      transformRequest: [(d) => d] 
+    }); 
+  }
+  async getImportHistory() { return this.get<Types.ApiResponse<any>>('/data-import/history'); }
+
+  // Trial Balance Core
+  async getTrialBalances() { return this.get<Types.ApiResponse<any>>('/trial-balances'); }
+  async getTrialBalanceById(tbId: string) { return this.get<Types.ApiResponse<any>>(`/trial-balances/${tbId}`); }
+  async deleteTrialBalance(tbId: string) { return this.delete<Types.ApiResponse<any>>(`/trial-balances/${tbId}`); }
+  async exportTrialBalance(tbId: string) { return this.get<Types.ApiResponse<any>>(`/trial-balances/${tbId}/export`); }
+  
+  // Account Management & Adjustments
+  async updateTrialBalanceAccount(tbId: string, accountId: string, data: any) { return this.patch<Types.ApiResponse<any>>(`/trial-balances/${tbId}/accounts/${accountId}`, data); }
+  async addAdjustment(tbId: string, accountId: string, data: any) { return this.post<Types.ApiResponse<any>>(`/trial-balances/${tbId}/accounts/${accountId}/adjustments`, data); }
+  
+  // Reconciliations & Statements
+  async getTrialBalanceSummary(tbId: string) { return this.get<Types.ApiResponse<any>>(`/trial-balances/${tbId}/summary`); }
+  async getLeadSchedules(engagementId: string) { return this.get<Types.ApiResponse<any>>(`/trial-balances/${engagementId}/lead-schedules`); }
+  async getReconciliation(engagementId: string) { return this.get<Types.ApiResponse<any>>(`/trial-balances/${engagementId}/reconciliation`); }
+  async getDraftStatements(engagementId: string) { return this.get<Types.ApiResponse<any>>(`/trial-balances/${engagementId}/statements`); }
+
+
+  // ==========================================
+  // 4. ACCOUNT MAPPING
+  // ==========================================
+  async getMappingCategories() { return this.get<Types.ApiResponse<any>>('/mapping/categories'); }
+  async getMappingStats(tbId: string) { return this.get<Types.ApiResponse<any>>(`/mapping/trial-balance/${tbId}/stats`); }
+  async autoMapTrialBalance(tbId: string) { return this.post<Types.ApiResponse<any>>(`/mapping/trial-balance/${tbId}/auto-map`); }
+  async manualMapAccount(data: any) { return this.post<Types.ApiResponse<any>>('/mapping/manual', data); }
+  async exportMappings(tbId: string) { return this.get<Types.ApiResponse<any>>(`/mapping/trial-balance/${tbId}/export`); }
+  
+  // ==========================================
+  // 5. INTEGRATIONS & EXTERNAL DATA
+  // ==========================================
+  async getAvailableIntegrations() { return this.get<Types.ApiResponse<any>>('/integrations/available'); }
+  async getIntegrationStatus(clientId: string) { return this.get<Types.ApiResponse<any>>(`/integrations/status/${clientId}`); }
+  async connectQuickBooks() { return this.post<Types.ApiResponse<any>>('/integrations/quickbooks/connect', {}); }
+  async connectXero() { return this.post<Types.ApiResponse<any>>('/integrations/xero/connect', {}); }
+  async syncIntegrationData(engagementId: string) { return this.post<Types.ApiResponse<any>>(`/integrations/sync/${engagementId}`, {}); }
+  async importBankTransactions(data: FormData) { 
+    return this.post<Types.ApiResponse<any>>('/integrations/bank/import', data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      transformRequest: [(d) => d] 
+    }); 
+  }
+  
+  // ==========================================
+  // 6. EXECUTION PHASE
+  // ==========================================
+  // Dashboards & Generation
+  async getExecutionDashboard(engagementId: string) { return this.get<Types.ApiResponse<any>>(`/execution/${engagementId}/dashboard`); }
+  async getProcedures(engagementId: string) { return this.get<Types.ApiResponse<any>>(`/execution/${engagementId}/procedures`); }
+  async generateProcedures(engagementId: string) { return this.post<Types.ApiResponse<any>>(`/execution/${engagementId}/procedures/generate`, {}); }
+  
+  // Procedure Management
+  async getProcedureById(procedureId: string) { return this.get<Types.ApiResponse<any>>(`/execution/procedures/${procedureId}`); }
+  async updateProcedure(procedureId: string, data: any) { return this.patch<Types.ApiResponse<any>>(`/execution/procedures/${procedureId}`, data); }
+  async submitProcedureEvidence(procedureId: string, data: FormData) { 
+    return this.post<Types.ApiResponse<any>>(`/execution/procedures/${procedureId}/submit`, data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      transformRequest: [(d) => d] 
+    }); 
+  }
+  async downloadEvidence(evidenceId: string) { return this.get<Blob>(`/execution/evidence/${evidenceId}/download`, { responseType: 'blob' }); }
+  async logAnalyticalProcedure(procedureId: string, data: any) { return this.post<Types.ApiResponse<any>>(`/execution/procedures/${procedureId}/analytical`, data); }
+  
+  // Manager Review
+  async reviewProcedure(procedureId: string, data: any) { return this.post<Types.ApiResponse<any>>(`/execution/procedures/${procedureId}/review`, data); }
+  async resolveReviewNote(noteId: string) { return this.patch<Types.ApiResponse<any>>(`/execution/review-notes/${noteId}/resolve`, {}); }
+  // Exceptions & AJEs
+  async logException(procedureId: string, data: any) { return this.post<Types.ApiResponse<any>>(`/execution/procedures/${procedureId}/exceptions`, data); }
+  async updateException(procedureId: string, exceptionId: string, data: any) { return this.patch<Types.ApiResponse<any>>(`/execution/procedures/${procedureId}/exceptions/${exceptionId}`, data); }
+  async proposeAje(engagementId: string, exceptionId: string, data: any) { return this.post<Types.ApiResponse<any>>(`/execution/${engagementId}/exceptions/${exceptionId}/ajes`, data); }
+
+  // ==========================================
+  // 7. COMPLETION PHASE
+  // ==========================================
+  async postAje(ajeId: string) { return this.post<Types.ApiResponse<any>>(`/completion/aje/${ajeId}/post`, {}); }
+  async reconcileFs(engagementId: string, data: any) { return this.post<Types.ApiResponse<any>>(`/completion/fs-reconciliation/${engagementId}`, data); }
+  async getMisstatements(engagementId: string) { return this.get<Types.ApiResponse<any>>(`/completion/${engagementId}/misstatements`); }
+  async getCompletionChecklist(engagementId: string) { return this.get<Types.ApiResponse<any>>(`/completion/${engagementId}/checklist`); }
+  async issueOpinion(engagementId: string, data: any) { return this.post<Types.ApiResponse<any>>(`/completion/${engagementId}/opinion`, data); }
+  async downloadAuditReport(engagementId: string) { 
+    return this.client.get(`/completion/${engagementId}/report/download`, { 
+      responseType: 'blob',
+      headers: {
+        'Accept': 'application/pdf'
+      }
+    }); 
+  }
+  async archiveEngagement(engagementId: string) { return this.post<Types.ApiResponse<any>>(`/completion/${engagementId}/archive`, {}); }
+
+
+  // ==========================================
+  // 8. WORKPAPERS
+  // ==========================================
+
+  // 1. Get all workpapers
+  async getWorkpapers() { 
+    return this.client.get('/workpapers'); 
   }
 
-  // 🛡️ Compliance
-  async getAuditTrail(entityType: string, entityId: string): Promise<ApiResponse<AuditLog[]>> {
-    return this.get<ApiResponse<AuditLog[]>>(`/compliance/audit-trail/${entityType}/${entityId}`);
-  }
-  async getUserAccessLogs(params: { startDate: string; endDate: string }): Promise<ApiResponse<UserAccessLog[]>> {
-    return this.get<ApiResponse<UserAccessLog[]>>('/compliance/user-access', params);
+  // 2. Create work paper
+  async createWorkpaper(data: any) { 
+    return this.client.post('/workpapers', data); 
   }
 
-  // 📋 PBC Requests
-  async getPBCRequests(engagementId: string, status?: PBCStatus): Promise<ApiResponse<PBCRequest[]>> {
-    return this.get<ApiResponse<PBCRequest[]>>(`/engagements/${engagementId}/pbc-requests`, { 
-      params: { status } 
+  // 3. Get work paper by id
+  async getWorkpaperById(wpId: string) { 
+    return this.client.get(`/workpapers/${wpId}`); 
+  }
+
+  // 4. Update workpaper (PUT)
+  async updateWorkpaper(wpId: string, data: any) { 
+    return this.client.put(`/workpapers/${wpId}`, data); 
+  }
+
+  // 5. Delete work paper
+  async deleteWorkpaper(wpId: string) { 
+    return this.client.delete(`/workpapers/${wpId}`); 
+  }
+
+  // 6. Upload work paper document (FormData for PDF)
+  async uploadWorkpaperDocument(wpId: string, formData: FormData) {
+    return this.client.post(`/workpapers/${wpId}/documents`, formData, {
+      headers: { 
+        'Content-Type': 'multipart/form-data' 
+      },
+      // CRITICAL: This stops Axios from converting the PDF binary into a JSON string
+      transformRequest: [(data) => data] 
     });
   }
-  async createPBCRequest(engagementId: string, data: Omit<CreatePBCRequestDto, 'engagementId'>): Promise<ApiResponse<PBCRequest>> {
-    return this.post<ApiResponse<PBCRequest>>(`/engagements/${engagementId}/pbc-requests`, {
-      ...data,
-      engagementId 
-    });
+
+  // 7. Review work paper (PUT)
+  async reviewWorkpaper(wpId: string) { 
+    return this.client.put(`/workpapers/${wpId}/review`, {}); 
   }
-  async updatePBCRequest(engagementId: string, requestId: string, data: UpdatePBCRequestDto): Promise<ApiResponse<PBCRequest>> {
-    return this.patch<ApiResponse<PBCRequest>>(`/engagements/${engagementId}/pbc-requests/${requestId}`, data);
+
+  // 8. Get work paper templates
+  async getWorkpaperTemplates() { 
+    return this.client.get('/workpapers/templates/list'); 
   }
-  async deletePBCRequest(engagementId: string, requestId: string): Promise<ApiResponse<void>> {
-    return this.delete(`/engagements/${engagementId}/pbc-requests/${requestId}`);
-  }
-  async uploadPBCFile(engagementId: string, requestId: string, file: File): Promise<ApiResponse<PBCRequest>> {
-    const formData = new FormData();
-    formData.append('file', file);
-    return this.post<ApiResponse<PBCRequest>>(
-      `/engagements/${engagementId}/pbc-requests/${requestId}/upload`, 
-      formData
-    );
-  }
+
+  // ==========================================
+  // 9. PBC (PROVIDED BY CLIENT) REQUESTS
+  // ==========================================
+  async getPbcRequests() { return this.client.get('/pbc-requests'); }
+  async getPbcTemplates() { return this.client.get('/pbc-requests/templates/list'); }
+  async createPbcRequest(data: any) { return this.client.post('/pbc-requests', data); }
+  async getPbcRequestById(pbcId: string) { return this.client.get(`/pbc-requests/${pbcId}`); }
+  async updatePbcRequest(pbcId: string, data: any) { return this.client.put(`/pbc-requests/${pbcId}`, data); }
+  async completePbcRequest(pbcId: string) { return this.client.put(`/pbc-requests/${pbcId}/complete`, {}); }
+  async deletePbcRequest(pbcId: string) { return this.client.delete(`/pbc-requests/${pbcId}`); }
+  
+  // ==========================================
+  // 10. ENTITIES
+  // ==========================================
+  async getEntities() { return this.client.get('/entities'); }
+  async createEntity(data: any) { return this.client.post('/entities', data); }
+  async getEntityById(entityId: string) { return this.client.get(`/entities/${entityId}`); }
+  async updateEntity(entityId: string, data: any) { return this.client.patch(`/entities/${entityId}`, data); }
+  async deleteEntity(entityId: string) { return this.client.delete(`/entities/${entityId}`); }
+  async getEntitiesByClient(clientId: string) { return this.client.get(`/entities/client/${clientId}`); }
+  async getEntityEngagements(entityId: string) { return this.client.get(`/entities/${entityId}/engagements`); }
+
+  // ==========================================
+  // 11. USERS
+  // ==========================================
+  async getUsers() { return this.client.get('/users'); }
+  async createUser(data: any) { return this.client.post('/users', data); }
+  async getUserProfile() { return this.client.get('/users/profile'); }
+  async getUserById(userId: string) { return this.client.get(`/users/${userId}`); }
+  async updateUser(userId: string, data: any) { return this.client.patch(`/users/${userId}`, data); } 
+  async deleteUser(userId: string) { return this.client.delete(`/users/${userId}`); }
+  async toggleUserStatus(userId: string) { return this.client.put(`/users/${userId}/toggle-status`, {}); }
 }
 
 export const apiClient = new ApiClient();

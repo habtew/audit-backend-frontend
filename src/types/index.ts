@@ -1,6 +1,31 @@
 // src/types/index.ts
 
-// --- Generic API Response ---
+// ==========================================
+// ENUMS (Mapped from Prisma)
+// ==========================================
+export type PreEngagementStatus = 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
+// Add this to src/types/index.ts (replacing the old UserRole)
+
+export type UserRole = 
+  | 'ASSOCIATE' // Prepares workpapers, runs procedures
+  | 'SENIOR'    // Reviews associate work, handles complex sections
+  | 'MANAGER'   // Engagement runner, reviews all work, proposes AJEs
+  | 'PARTNER'   // Signs off on phases, generates opinion
+  | 'EQCR'      // Engagement Quality Control Reviewer (read-only/review-only for high risk)
+  | 'ADMIN';    // Firm setup, billing, user management
+export type EngagementType = 'AUDIT' | 'REVIEW' | 'COMPILATION' | 'TAX' | 'ADVISORY';
+export type EngagementStatus = 'PLANNING' | 'EXECUTION' | 'FIELDWORK' | 'REVIEW' | 'COMPLETED' | 'ARCHIVED';
+export type DocumentType = 'TRIAL_BALANCE' | 'PBC_REQUEST' | 'WORKPAPER' | 'EVIDENCE' | 'REPORT' | 'CORRESPONDENCE';
+export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+export type TransactionType = 'DEBIT' | 'CREDIT';
+export type OpinionType = 'UNMODIFIED' | 'QUALIFIED' | 'ADVERSE' | 'DISCLAIMER';
+export type BasisType = 'MISSTATEMENT' | 'SCOPE_LIMITATION';
+export type OpinionStatus = 'DRAFT' | 'FINAL';
+export type ParagraphType = 'EMPHASIS_OF_MATTER' | 'OTHER_MATTER' | 'GOING_CONCERN';
+
+// ==========================================
+// CORE RESPONSES
+// ==========================================
 export interface ApiResponse<T> {
   data: T;
   message: string;
@@ -12,53 +37,8 @@ export interface SuccessResponse {
   message: string | { success: boolean };
 }
 
-// --- Auth Types ---
-export interface LoginSuccessData {
-  access_token: string;
-  user: User;
-}
+// dashboard operations
 
-export interface LoginCredentials {
-  email: string;
-  password: string;
-}
-
-export interface RegisterData {
-  name: string;
-  email: string;
-  password: string;
-  role?: string;
-}
-
-export interface User {
-  id: string;
-  firstName?: string;
-  lastName?: string;
-  name?: string; // Fallback
-  email: string;
-  role?: string;
-  isActive?: boolean;
-  status?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  password?: string;
-}
-
-// --- Common Types ---
-export interface Document {
-  id: string;
-  name: string;
-  filePath: string;
-  fileSize: number;
-  mimeType: string;
-  createdAt: string;
-  uploader?: {
-    firstName: string;
-    lastName: string;
-  };
-}
-
-// --- Dashboard Types ---
 export interface DashboardOverview {
   engagements: { total: number; active: number; completed: number; };
   clients: { total: number; };
@@ -75,9 +55,23 @@ export interface DashboardActivity {
   description: string;
 }
 
-export interface DashboardDeadlines {
-  engagements: any[];
-  pbcRequests: any[];
+export interface DashboardDeadline {
+  id: string;
+  name: string;
+  client?: string;
+  deadline: string;
+  type: string;
+  status: string;
+}
+
+export interface DashboardWorkload {
+  user: {
+    firstName: string;
+    lastName: string;
+    role: string;
+  };
+  activeEngagements: number;
+  hoursThisWeek: number;
 }
 
 export interface DashboardKPIs {
@@ -92,27 +86,44 @@ export interface DashboardKPIs {
   };
 }
 
-export interface DashboardWorkload {
-  user: { firstName: string; lastName: string; role: string; };
-  activeEngagements: number;
-  hoursThisWeek: number;
+// ==========================================
+// 0. CORE & FIRM MODELS
+// ==========================================
+export interface User {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: UserRole;
+  isActive: boolean;
+  lastLogin?: string;
+  createdAt: string;
 }
 
-// --- Client & Entity Types ---
+export interface ClientContact {
+  id: string;
+  clientId: string;
+  name: string;
+  position: string;
+  email: string;
+  isPrimary: boolean;
+}
+
 export interface Client {
   id: string;
   name: string;
-  contactPerson?: string;
-  company?: string;
-  email?: string;
-  phone?: string;
-  address?: string;
-  taxId?: string;
   industry?: string;
-  isActive?: boolean;
-  status?: string;
-  createdAt?: string;
-  updatedAt?: string;
+  address?: string;
+  principalPlaceOfBusiness?: string;
+  countryOfIncorporation?: string;
+  dateOfIncorporation?: string;
+  phone?: string;
+  email?: string;
+  contactPerson?: string;
+  taxId?: string;
+  shareholdersList?: string;
+  isActive: boolean;
+  contacts?: ClientContact[];
 }
 
 export interface Entity {
@@ -120,49 +131,168 @@ export interface Entity {
   name: string;
   type: string;
   taxId?: string;
-  yearEnd?: string; // ISO Date string
+  yearEnd: string;
   clientId: string;
-  isActive?: boolean;
-  createdAt?: string;
-  updatedAt?: string;
+  isActive: boolean;
 }
 
-// --- Pre-Engagement & Planning Types (NEW) ---
+export interface Engagement {
+  id: string;
+  name: string;
+  type: EngagementType;
+  status: EngagementStatus;
+  description?: string;
+  startDate: string;
+  endDate: string;
+  budgetHours?: number;
+  actualHours: number;
+  yearEnd: string;
+  clientId: string;
+  entityId?: string;
+  preEngagementId?: string;
+  overallMateriality?: number;
+  performanceMateriality?: number;
+  trivialThreshold?: number;
+  isLocked: boolean;
+  client?: Client;
+  entity?: Entity;
+}
 
+// ==========================================
+// 1. PRE-ENGAGEMENT PHASE (ISA 210/220)
+// ==========================================
 export interface PreEngagement {
   id: string;
   clientId: string;
-  status: 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
+  status: PreEngagementStatus;
   financialFramework: string;
+  managementAcknowledged: boolean;
+  engagementLetterUrl?: string;
+  engagementLetterDate?: string;
+  agreedFee?: number;
+  currency?: string;
+  termsAgreed: boolean;
   auditPeriodStart: string;
   auditPeriodEnd: string;
   integrityCheckResult?: string;
   competenceCheckResult?: string;
   ethicalConflictNotes?: string;
-  termsAgreed?: boolean;
-  agreedFee?: number | string;
-  currency?: string;
-  engagementLetterUrl?: string;
-  managementAcknowledged?: boolean;
-  createdById?: string;
   approvedById?: string;
-  createdAt: string;
-  updatedAt: string;
+  complianceCheck?: ComplianceCheck;
 }
 
+export interface IndependenceDeclaration {
+  id: string;
+  preEngagementId: string;
+  userId: string;
+  isIndependent: boolean;
+  threatsIdentified?: string;
+  safeguardsApplied?: string;
+  declaredAt: string;
+}
+
+export interface ComplianceCheck {
+  id: string;
+  preEngagementId: string;
+  // Independence
+  hasFinancialInterest: boolean;
+  hasConflictOfInterests: boolean;
+  independenceNotes?: string;
+  independenceConclusion?: string;
+  // Competence
+  firmHasTechnicalExpertise: boolean;
+  specialistsAvailable: boolean;
+  timeConstraintsManageable: boolean;
+  competenceNotes?: string;
+  competenceConclusion?: string;
+  // Integrity
+  backgroundChecksClear: boolean;
+  noKnownFraudOrDisputes: boolean;
+  goodEthicalCulture: boolean;
+  integrityNotes?: string;
+  integrityConclusion?: string;
+  // Predecessor
+  clientGrantedPermission: boolean;
+  predecessorCommunicated: boolean;
+  predecessorNotes?: string;
+  predecessorConclusion?: string;
+  // Understanding
+  operationsUnderstood: boolean;
+  industryRisksAssessed: boolean;
+  financialStabilityAssessed: boolean;
+  understandingConclusion?: string;
+  
+  isAccepted: boolean;
+}
+
+// ==========================================
+// 2. PLANNING & RISK PHASE
+// ==========================================
 export interface Materiality {
   id: string;
   engagementId: string;
   benchmark: string;
-  benchmarkValue: number | string;
-  rulePercentage: number | string;
-  overallMateriality: number | string;
-  performanceMateriality: number | string;
-  trivialThreshold: number | string;
-  rationale: string;
+  benchmarkValue: number;
+  rulePercentage: number;
+  overallMateriality: number;
+  performanceMateriality: number;
+  trivialThreshold: number;
+  rationale?: string;
   isFinal: boolean;
-  approvedById?: string;
-  createdAt: string;
+}
+
+export interface EntityUnderstanding {
+  id: string;
+  engagementId: string;
+  businessModel?: string;
+  governanceStructure?: string;
+  industryConditions?: string;
+  regulatoryFramework?: string;
+  itSystems?: string;
+  internalControls?: string;
+}
+
+export interface SpecialAuditConsiderations {
+  id: string;
+  engagementId: string;
+  lawsAndRegulations?: string;
+  noclarIdentified: boolean;
+  relatedParties?: string;
+  unusualTransactions: boolean;
+  goingConcernAssessment?: string;
+  goingConcernDoubt: boolean;
+  serviceOrganizations?: string;
+  type2ReportAvailable: boolean;
+}
+
+export interface RiskAssessment {
+  id: string;
+  engagementId: string;
+  riskDescription: string;
+  category: string;
+  accountArea: string;
+  riskLevelType: string;
+  isSignificant: boolean;
+  isFraudRisk: boolean;
+  assertion?: string;
+  inherentRisk: string;
+  controlRisk: string;
+  detectionRisk: string;
+  mitigationPlan?: string;
+  status: string;
+}
+
+export interface FraudBrainstorming {
+  id: string;
+  engagementId: string;
+  discussionDate: string;
+  participants: string;
+  fraudRisksIdentified?: string;
+  managementOverride?: string;
+  revenueFraudPresumption: boolean;
+  revenueFraudRationale?: string;
+  conclusion?: string;
+  isFinal: boolean;
 }
 
 export interface AuditStrategy {
@@ -172,532 +302,292 @@ export interface AuditStrategy {
   timing: string;
   direction: string;
   significantChanges?: string;
-  resources: string;
+  resources?: string;
   useOfExperts: boolean;
   relianceOnControls: boolean;
   itEnvironmentConsidered: boolean;
   financialStatementLevelRisks?: string;
   significantRiskSummary?: string;
-  status: 'DRAFT' | 'FINAL';
-  approvedById?: string;
-  createdAt: string;
+  status: string;
 }
 
-export interface FraudBrainstorming {
-  id: string;
-  engagementId: string;
-  discussionDate: string;
-  participants: string;
-  fraudRisksIdentified: string;
-  managementOverride: string;
-  revenueFraudPresumption: boolean;
-  revenueFraudRationale?: string; // If presumption rejected
-  conclusion: string;
-  isFinal: boolean;
-  approvedById?: string;
-  createdAt: string;
-}
-
-// Enhanced Risk Type for Planning Phase
-export interface PlanningRisk {
-  id: string;
-  engagementId: string;
-  riskDescription: string;
-  category: 'FRAUD' | 'ERROR' | 'SIGNIFICANT' | 'OTHER';
-  accountArea: string;
-  riskLevelType: 'FINANCIAL_STATEMENT_LEVEL' | 'ASSERTION_LEVEL';
-  assertion?: 'EXISTENCE' | 'RIGHTS_OBLIGATIONS' | 'COMPLETENESS' | 'ACCURACY_VALUATION' | 'CLASSIFICATION' | 'PRESENTATION';
-  inherentRisk: 'LOW' | 'MEDIUM' | 'HIGH';
-  controlRisk: 'LOW' | 'MEDIUM' | 'HIGH';
-  detectionRisk: 'LOW' | 'MEDIUM' | 'HIGH';
-  isSignificant: boolean;
-  isFraudRisk: boolean;
-  mitigationPlan: string;
-  status: 'DRAFT' | 'FINAL';
-  assessedBy?: string;
-  createdAt: string;
-}
-
-// --- Engagement Types ---
-export interface Engagement {
-  id: string;
-  name: string;
-  type: 'AUDIT' | 'REVIEW' | 'COMPILATION' | 'TAX' | 'ADVISORY';
-  // Updated status to include EXECUTION based on new backend
-  status: 'PLANNING' | 'EXECUTION' | 'FIELDWORK' | 'REVIEW' | 'COMPLETED' | 'ARCHIVED'; 
-  description?: string;
-  startDate?: string;
-  endDate?: string;
-  yearEnd?: string;
-  clientId: string;
-  entityId: string;
-  budgetHours: number;
-  actualHours?: number;
-  createdAt?: string;
-  updatedAt?: string;
-  client?: { id: string; name: string };
-  entity?: { id: string; name: string };
-  creator?: { firstName: string; lastName: string; email: string };
-  // New Links
-  preEngagementId?: string;
-  preEngagement?: PreEngagement;
-}
-
-export interface EngagementResponse {
-  engagements: Engagement[];
-  pagination: {
-    total: number;
-    page: number;
-    limit: number;
-    totalPages: number;
-  };
-}
-
-export interface AssignUserDto {
-  userId: string;
-  role: string;
-}
-
-export interface EngagementTeamUser {
-  id: string;
-  engagementId: string;
-  userId: string;
-  role: string;
-  assignedAt: string;
-  user: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-    role: string;
-  };
-}
-
-// --- Workpaper Types ---
-export interface Workpaper {
-  id: string;
-  engagementId: string;
-  reference: string;
-  title: string;
-  description?: string;
-  status: 'NOT_STARTED' | 'IN_PROGRESS' | 'REVIEWED' | 'COMPLETED' | 'DRAFT';
-  content?: any;
-  assignedTo?: string;
-  reviewedBy?: string;
-  reviewedAt?: string;
-  createdAt?: string;
-  updatedAt?: string;
-  engagement?: Engagement;
-  documents?: Document[];
-  _count?: {
-    documents: number;
-  };
-}
-
-export interface WorkpaperTemplate {
-  templateId: string;
-  name: string;
-  category: string;
-  description?: string;
-}
-
-// --- Risk Assessment Types (Legacy/Simple) ---
-export interface RiskAssessment {
-  id: string;
-  engagementId: string;
-  category: string;
-  riskDescription: string;
-  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-  likelihood: 'LOW' | 'MEDIUM' | 'HIGH';
-  impact: 'LOW' | 'MEDIUM' | 'HIGH';
-  mitigationPlan?: string;
-  assessedBy?: string;
-  assessedAt?: string;
-  isActive?: boolean;
-  createdAt?: string;
-  updatedAt?: string;
-  engagement?: {
-    id?: string;
-    name: string;
-    client?: { name: string };
-  };
-}
-
-export interface RiskMatrix {
-  engagementId: string;
-  matrix: {
-    HIGH: { HIGH: RiskAssessment[]; MEDIUM: RiskAssessment[]; LOW: RiskAssessment[] };
-    MEDIUM: { HIGH: RiskAssessment[]; MEDIUM: RiskAssessment[]; LOW: RiskAssessment[] };
-    LOW: { HIGH: RiskAssessment[]; MEDIUM: RiskAssessment[]; LOW: RiskAssessment[] };
-  };
-  summary: {
-    total: number;
-    critical: number;
-    high: number;
-    medium: number;
-    low: number;
-  };
-}
-
-export interface RiskReport {
-  engagement: {
-    name: string;
-    client: string;
-    entity: string;
-  };
-  summary: {
-    totalRisks: number;
-    highRisks: number;
-    categoriesAssessed: number;
-  };
-  risksByCategory: Record<string, RiskAssessment[]>;
-  highPriorityRisks: RiskAssessment[];
-  recommendations: {
-    priority: string;
-    message: string;
-  }[];
-  generatedAt: string;
-  generatedBy: string;
-}
-
-// --- Trial Balance Types ---
-export interface TrialBalanceSummaryData {
-  totalAccounts: number;
-  totalDebits: number | string;
-  totalCredits: number | string;
-  isBalanced: boolean;
-  accountTypes: Record<string, number>;
-}
-
+// ==========================================
+// 3. DATA ACQUISITION & TB
+// ==========================================
 export interface TrialBalance {
   id: string;
   engagementId: string;
-  period: string; // ISO String
+  period: string;
   version: number;
   description?: string;
-  totalDebits: string | number;  // API returns string "0"
-  totalCredits: string | number; // API returns string "0"
+  totalDebits: number;
+  totalCredits: number;
   isBalanced: boolean;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-  engagement?: {
-    name: string;
-    client?: { name: string };
-  };
-  accounts?: TrialBalanceAccount[];
-  mappings?: any[]; // Placeholder for mappings
-  _count?: {
-    accounts: number;
-  };
 }
 
-export interface TrialBalanceAccount {
+export interface Account {
   id: string;
   trialBalanceId: string;
   accountNumber: string;
   accountName: string;
-  debitAmount: number;
-  creditAmount: number;
+  accountType: string;
+  debitAmount?: number;
+  creditAmount?: number;
   balance: number;
-  category?: string;
-  subCategory?: string;
-  isMapped: boolean;
-  mappings?: any[];
+  adjustedDebit?: number;
+  adjustedCredit?: number;
+  adjustedBalance?: number;
+  isAdjusted: boolean;
 }
 
-export interface AdjustmentPayload {
-  description: string;
-  amount: number;
-  type: 'DEBIT' | 'CREDIT';
-  adjustmentType?: 'CORRECTION' | 'RECLASSIFICATION' | 'PROPOSED';
-}
-
-export interface ComparisonResult {
-  accountNumber: string;
-  accountName: string;
-  currentBalance: number;
-  previousBalance: number;
-  variance: number;
-  variancePercentage: number;
-}
-
-export interface UpdateAccountPayload {
-  accountName?: string;
-  category?: string;
-  subCategory?: string;
-  note?: string;
-}
-
-// --- Billing Types ---
-export enum InvoiceStatus {
-  DRAFT = 'DRAFT',
-  SENT = 'SENT',
-  PAID = 'PAID',
-  OVERDUE = 'OVERDUE',
-  CANCELLED = 'CANCELLED'
-}
-
-export interface InvoiceItem {
-  id?: string;
-  invoiceId?: string;
-  description: string;
-  quantity: number;
-  rate: number | string;
-  amount: number | string;
-}
-
-export interface Invoice {
+export interface AccountMapping {
   id: string;
-  clientId: string;
-  invoiceNumber: string;
-  issueDate: string;
-  dueDate: string;
-  status: InvoiceStatus | string;
-  
-  // API returns strings for amounts
-  subtotal: string | number;
-  tax: string | number;      // Changed from taxAmount
-  total: string | number;    // Changed from totalAmount
-  
-  paidAt?: string | null;
-  notes?: string;
-  isActive?: boolean;
-  createdAt: string;
-  updatedAt: string;
-  
-  // API uses invoiceItems instead of items
-  invoiceItems: InvoiceItem[];
-  
-  client?: {
-    id: string;
-    name: string;
-    email?: string;
-    address?: string;
-  };
-  engagement?: {
-    id: string;
-    name: string;
-    title?: string;
-  };
+  trialBalanceId: string;
+  accountId: string;
+  mappedCategory: string;
+  mappedSubcategory?: string;
+  confidence: number;
+  isManual: boolean;
 }
 
-export interface CreateInvoicePayload {
-  clientId: string;
-  engagementId?: string;
-  issueDate: string;
-  dueDate: string;
-  notes?: string;
-  taxRate?: number;
-  items: Array<{
-    description: string;
-    quantity: number;
-    rate: number;
-    amount: number;
-  }>;
-}
-
-export interface BillableHour {
+export interface Transaction {
   id: string;
-  userId: string;
-  engagementId: string;
-  taskId?: string;
-  description: string;
+  accountId: string;
   date: string;
-  hours: number;
-  rate: number;
+  description: string;
+  type: TransactionType;
   amount: number;
-  status: BillableHourStatus;
-  isBilled?: boolean; // Can derive from status === INVOICED
-  isBillable?: boolean;
-  user?: { name?: string; firstName?: string; lastName?: string };
-  engagement?: { name: string; title?: string; client: { name: string } };
+  reference?: string;
+  isReconciled: boolean;
 }
 
-export enum BillableHourStatus { PENDING = 'PENDING', APPROVED = 'APPROVED', REJECTED = 'REJECTED', INVOICED = 'INVOICED' }
-
-export interface CreateInvoicePayload {
-  clientId: string;
-  engagementId?: string;
-  issueDate: string;
-  dueDate: string;
-  items: Array<{ description: string; quantity: number; rate: number }>;
-  notes?: string;
-}
-
-export interface CreateInvoiceDto extends CreateInvoicePayload {} 
-
-export interface CreateTimeEntryPayload {
+// ==========================================
+// 4. EXECUTION PHASE (ISA 330, 500, 520, 530)
+// ==========================================
+export interface AuditProcedure {
+  id: string;
   engagementId: string;
+  riskId?: string;
+  refNumber: string;
+  procedureText: string;
+  auditorResponse?: string;
+  accountArea: string;
+  assertion: string;
+  procedureType: string;
+  evidenceMethod: string;
+  samplingMethod?: string;
+  sampleSize?: number;
+  populationSize?: number;
+  samplingJustification?: string;
+  status: string;
+  priority: string;
+  exceptionsFound: boolean;
+  assignedToId?: string;
+  preparedById?: string;
+  reviewedById?: string;
+}
+
+export interface AuditEvidence {
+  id: string;
+  procedureId: string;
+  fileUrl: string;
+  fileName: string;
+  evidenceType: string;
+  uploadedById: string;
+  uploadedAt: string;
+}
+
+export interface ReviewNote {
+  id: string;
+  procedureId: string;
+  note: string;
+  status: 'OPEN' | 'CLEARED';
+  createdById: string;
+  resolvedById?: string;
+}
+
+export interface AssertionCoverage {
+  id: string;
+  engagementId: string;
+  accountArea: string;
+  assertion: string;
+  isCovered: boolean;
+  coveredByProcId?: string;
+}
+
+export interface AuditException {
+  id: string;
+  procedureId: string;
   description: string;
-  date: string;
-  hours: number;
-  isBillable?: boolean;
+  financialImpact?: number;
+  isMaterial: boolean;
+  resolutionType: string;
+  resolutionReason?: string;
 }
 
-// --- Analytics Types ---
-export interface AnalyticsDateParams {
-  startDate?: string;
-  endDate?: string;
-  engagementId?: string;
-  userId?: string;
-  clientId?: string; // Added clientId
+export interface ProposedAJE {
+  id: string;
+  exceptionId: string;
+  debitAccountId: string;
+  creditAccountId: string;
+  amount: number;
+  description: string;
+  status: string;
+  rejectionReason?: string;
 }
 
-export interface EngagementAnalytics {
+export interface AnalyticalProcedure {
+  id: string;
+  procedureId: string;
+  analyticalType: string;
+  expectationBasis: string;
+  expectedAmount: number;
+  actualAmount: number;
+  varianceThreshold: number;
+  varianceAmount: number;
+  isVarianceBreached: boolean;
+  isMaterialVariance: boolean;
+  managementExplanation?: string;
+  auditorCorroboration?: string;
+  requiresSubstantiveTest: boolean;
+  followUpProcedureId?: string;
+}
+
+// ==========================================
+// 5. COMPLETION & REPORTING (ISA 450, 700, 701)
+// ==========================================
+export interface Adjustment {
+  id: string;
+  accountId: string;
+  proposedAjeId?: string;
+  amount: number;
+  type: string;
+  description: string;
+  postedById: string;
+}
+
+export interface FinancialStatement {
+  id: string;
+  engagementId: string;
+  lineItem: string;
+  amount: number;
+  source: string;
+}
+
+export interface FSReconciliation {
+  id: string;
+  engagementId: string;
+  fsLineItem: string;
+  tbAccountArea: string;
+  fsAmount: number;
+  tbAmount: number;
+  difference: number;
+  isReconciled: boolean;
+  explanation?: string;
+}
+
+export interface AuditSummary {
+  id: string;
+  engagementId: string;
+  totalMisstatements: number;
+  correctedAmount: number;
+  uncorrectedAmount: number;
+  materiality: number;
+  performanceMateriality: number;
+  isMaterialBreached: boolean;
+}
+
+export interface Opinion {
+  id: string;
+  engagementId: string;
+  opinionType: OpinionType;
+  basisType?: BasisType;
+  customBasisText?: string;
+  templateVersion: string;
+  generatedContent: any;
+  status: OpinionStatus;
+  isLocked: boolean;
+  paragraphs?: OpinionParagraph[];
+  keyAuditMatters?: KeyAuditMatter[];
+}
+
+export interface OpinionParagraph {
+  id: string;
+  opinionId: string;
+  type: ParagraphType;
+  content: string;
+}
+
+export interface KeyAuditMatter {
+  id: string;
+  opinionId: string;
+  title: string;
+  description: string;
+  auditResponse: string;
+  order: number;
+}
+
+export interface CompletionChecklist {
+  id: string;
+  engagementId: string;
+  assertionsCovered: boolean;
+  reviewNotesCleared: boolean;
+  evidenceComplete: boolean;
+  fsReconciled: boolean;
+  ajesPosted: boolean;
+  isReadyForOpinion: boolean;
+}
+
+// ==========================================
+// FIRM ANALYTICS TYPES
+// ==========================================
+export interface AnalyticsEngagements {
   totalEngagements: number;
   engagementsByStatus: Record<string, number>;
   engagementsByType: Record<string, number>;
   averageHours: number;
 }
 
-export interface UserPerformanceMetric {
-  user: {
-    firstName: string;
-    lastName: string;
-    role: string;
-  };
+export interface AnalyticsBillingHours {
   totalHours: number;
-  entriesCount: number;
+  totalBillableAmount: number;
+  dailyBreakdown: any[];
 }
 
-export interface BillingAnalytics {
-  totalHours: number;
-  totalBillableAmount: string | number;
-  dailyBreakdown: Array<{
-    _sum: {
-      hours: number;
-    };
-    date: string;
-  }>;
-}
-
-export interface RiskAnalytics {
+export interface AnalyticsRisk {
   totalRisks: number;
   risksByLevel: Record<string, number>;
   risksByCategory: Record<string, number>;
 }
 
-export interface EngagementProgress {
+export interface PartnerAttentionItem {
+  engagementId: string;
+  clientName: string;
+  status: string;
+  dueDate: string;
+  isOverdue: boolean;
+  hasMaterialExceptions: boolean;
+  pendingExceptions: number;
+  unadjustedMisstatements: number;
+}
+
+export interface AnalyticsPartnerDashboard {
+  overview: {
+    totalActiveEngagements: number;
+    firmWideUncorrectedMisstatements: number;
+    pipeline: Record<string, number>;
+  };
+  attentionRequired: PartnerAttentionItem[];
+}
+
+export interface AnalyticsEngagementProgress {
   engagement: {
-    id: string;
-    name: string;
-    status: string;
-    budgetHours: number;
-    actualHours: number;
+    id: string; name: string; status: string; budgetHours: number | null; actualHours: number;
   };
   progress: {
-    workpapers: { completed: number; total: number; percentage: number };
-    pbc: { completed: number; total: number; percentage: number };
-    overall: { percentage: number };
+    workpapers: { completed: number; total: number; percentage: number; };
+    pbc: { completed: number; total: number; percentage: number; };
+    overall: { percentage: number; };
   };
-  counts: {
-    workpapers: number;
-    pbcRequests: number;
-    documents: number;
-  };
-}
-
-export interface ReportTemplate {
-  id: string;
-  code: string;
-  name: string;
-  description: string;
-  supportedFormats: string[];
-}
-
-export interface ReportHistory {
-  id: string;
-  templateName: string;
-  generatedBy: string;
-  generatedAt: string;
-  status: 'PROCESSING' | 'COMPLETED' | 'FAILED';
-  downloadUrl?: string;
-}
-
-// --- Compliance ---
-export interface AuditLog {
-  id: string;
-  action: string;
-  entityType: string;
-  entityId: string;
-  userId: string;
-  userEmail: string;
-  timestamp: string;
-  details: any;
-}
-
-export interface UserAccessLog {
-  userId: string;
-  userName: string;
-  role: string;
-  lastLogin: string;
-  status: 'ACTIVE' | 'INACTIVE';
-}
-
-// --- PBC Requests ---
-export enum PBCStatus {
-  OPEN = 'OPEN',
-  SUBMITTED = 'SUBMITTED',
-  REVIEWED = 'REVIEWED',
-  RETURNED = 'RETURNED'
-}
-
-export interface PBCRequest {
-  id: string;
-  engagementId: string;
-  title: string;
-  description?: string;
-  dueDate: string;
-  status: PBCStatus;
-  assigneeId?: string;
-  files: Array<{ 
-    id: string; 
-    url: string; 
-    originalName: string; 
-    uploadedAt: string 
-  }>;
-  createdAt: string;
-  updatedAt: string;
-  assignee?: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-  };
-}
-
-export interface CreatePBCRequestDto {
-  engagementId: string;
-  title: string;
-  description?: string;
-  dueDate: string;
-  assigneeId?: string;
-}
-
-export interface UpdatePBCRequestDto {
-  status?: PBCStatus;
-  assigneeId?: string;
-  comments?: string;
-}
-
-
-export interface ClientResponse {
-  clients: Client[];
-  pagination: {
-    total: number;
-    page: number;
-    limit: number;
-    totalPages: number;
-  };
-}
-
-export interface UserResponse {
-  users: User[];
-  pagination: {
-    total: number;
-    page: number;
-    limit: number;
-    totalPages: number;
-  };
+  counts: { workpapers: number; pbcRequests: number; documents: number; };
 }

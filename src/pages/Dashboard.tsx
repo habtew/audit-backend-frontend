@@ -1,78 +1,59 @@
+// src/pages/Dashboard.tsx
 import React, { useEffect, useState } from 'react';
 import {
-  ChartBarIcon,
-  BuildingOfficeIcon,
   BriefcaseIcon,
+  BuildingOfficeIcon,
   CurrencyDollarIcon,
   ClockIcon,
   CheckCircleIcon,
-  DocumentTextIcon,
+  ExclamationCircleIcon,
+  UserGroupIcon
 } from '@heroicons/react/24/outline';
-import { LineChart, Line, PieChart, Pie, Cell, Tooltip, ResponsiveContainer, CartesianGrid, XAxis, YAxis } from 'recharts';
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, 
+  PieChart, Pie, Cell 
+} from 'recharts';
 import apiClient from '../utils/api';
 import LoadingSpinner from '../components/Common/LoadingSpinner';
-import { 
-  DashboardOverview, 
-  DashboardActivity, 
-  DashboardKPIs 
-} from '../types';
-
-// Internal state type to hold all dashboard data
-interface DashboardData {
-  overview: DashboardOverview | null;
-  activity: DashboardActivity[];
-  kpis: DashboardKPIs | null;
-  deadlines: any[]; // Combined list
-  engagementStatus: Record<string, number>;
-}
+import { DashboardOverview, DashboardActivity, DashboardDeadline, DashboardWorkload, DashboardKPIs } from '../types';
 
 const Dashboard: React.FC = () => {
-  const [data, setData] = useState<DashboardData>({
-    overview: null,
-    activity: [],
-    kpis: null,
-    deadlines: [],
-    engagementStatus: {},
-  });
   const [loading, setLoading] = useState(true);
-
-  // Helper to safely extract data property
-  const safeExtract = (res: any, isArray = false) => {
-    const val = res?.data !== undefined ? res.data : res;
-    if (isArray) return Array.isArray(val) ? val : [];
-    return val || (isArray ? [] : {});
-  };
+  
+  // Dashboard States
+  const [overview, setOverview] = useState<DashboardOverview | null>(null);
+  const [activity, setActivity] = useState<DashboardActivity[]>([]);
+  const [deadlines, setDeadlines] = useState<DashboardDeadline[]>([]);
+  const [workload, setWorkload] = useState<DashboardWorkload[]>([]);
+  const [kpis, setKpis] = useState<DashboardKPIs | null>(null);
+  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        const [overviewRes, activityRes, deadlinesRes, kpisRes, statusRes] = await Promise.all([
+        const [overviewRes, activityRes, deadlinesRes, workloadRes, kpisRes, statusRes] = await Promise.all([
           apiClient.getDashboardOverview(),
           apiClient.getRecentActivity(),
           apiClient.getUpcomingDeadlines(),
+          apiClient.getWorkload(),
           apiClient.getKPIs(),
           apiClient.getEngagementStatus()
         ]);
 
-        const overview = safeExtract(overviewRes);
-        const activity = safeExtract(activityRes, true);
-        const kpis = safeExtract(kpisRes);
-        const status = safeExtract(statusRes);
+        // Map responses handling the Axios / API wrapper structure
+        setOverview(overviewRes.data);
+        setActivity(activityRes.data || []);
         
-        // Process deadlines: combine engagements and pbcRequests
-        const rawDeadlines = safeExtract(deadlinesRes);
-        const combinedDeadlines = [
-          ...(rawDeadlines.engagements || []).map((d: any) => ({ ...d, type: 'Engagement' })),
-          ...(rawDeadlines.pbcRequests || []).map((d: any) => ({ ...d, type: 'PBC Request' }))
-        ].sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+        // Flatten engagements and PBC deadlines into one timeline array
+        const fetchedDeadlines = [
+          ...(deadlinesRes.data?.engagements || []),
+          ...(deadlinesRes.data?.pbcRequests || [])
+        ].sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime());
+        setDeadlines(fetchedDeadlines);
 
-        setData({
-          overview,
-          activity,
-          kpis,
-          deadlines: combinedDeadlines,
-          engagementStatus: status
-        });
+        setWorkload(workloadRes.data || []);
+        setKpis(kpisRes.data);
+        setStatusCounts(statusRes.data || {});
 
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error);
@@ -86,156 +67,147 @@ const Dashboard: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
+      <div className="flex justify-center items-center h-[60vh]">
         <LoadingSpinner size="lg" />
       </div>
     );
   }
 
-  // --- Prepare Data for UI ---
+  // --- Process Data for Charts ---
+  const PIE_COLORS = ['#10B981', '#F59E0B', '#3B82F6', '#6366F1', '#EC4899'];
+  const statusChartData = Object.entries(statusCounts).map(([name, value]) => ({ name, value }));
 
-  // 1. Stat Cards
+  // --- Stat Cards Configuration ---
   const statCards = [
     {
       name: 'Total Clients',
-      value: data.overview?.clients?.total || 0,
+      value: overview?.clients?.total || 0,
       icon: BuildingOfficeIcon,
       color: 'bg-blue-500',
+      textColor: 'text-blue-600',
     },
     {
       name: 'Active Engagements',
-      value: data.overview?.engagements?.active || 0,
+      value: overview?.engagements?.active || 0,
       icon: BriefcaseIcon,
-      color: 'bg-green-500',
+      color: 'bg-indigo-500',
+      textColor: 'text-indigo-600',
     },
     {
-      name: 'Pending Actions',
-      // Sum of pending PBCs and overdue workpapers from overview.workload
-      value: (data.overview?.workload?.pendingPBCs || 0) + (data.overview?.workload?.overdueWorkpapers || 0),
-      icon: DocumentTextIcon,
-      color: 'bg-yellow-500',
-    },
-    {
-      name: 'Revenue Generated',
-      value: `$${(data.kpis?.kpis?.revenueGenerated || 0).toLocaleString()}`,
+      name: 'Unbilled Revenue',
+      value: `$${(overview?.billing?.unbilledAmount || 0).toLocaleString()}`,
       icon: CurrencyDollarIcon,
-      color: 'bg-purple-500',
+      color: 'bg-amber-500',
+      textColor: 'text-amber-600',
+    },
+    {
+      name: 'Action Items (PBC/WP)',
+      value: (overview?.workload?.pendingPBCs || 0) + (overview?.workload?.overdueWorkpapers || 0),
+      icon: ExclamationCircleIcon,
+      color: 'bg-red-500',
+      textColor: 'text-red-600',
     },
   ];
-
-  // 2. Charts Data
-  // Note: The API doesn't provide monthly revenue trends yet, using mock for visual
-  // If you have a specific endpoint for trends, we can swap this.
-  const revenueData = [
-    { month: 'Jan', revenue: 12000 },
-    { month: 'Feb', revenue: 19000 },
-    { month: 'Mar', revenue: 3000 },
-    { month: 'Apr', revenue: 5000 },
-    { month: 'May', revenue: 2000 },
-    { month: 'Jun', revenue: 3000 },
-  ];
-
-  // Engagement Status for Pie Chart
-  // If API returns empty object {}, we show a default empty state
-  const statusData = Object.keys(data.engagementStatus).length > 0 
-    ? Object.entries(data.engagementStatus).map(([name, value]) => ({ name, value }))
-    : [
-        { name: 'Active', value: data.overview?.engagements?.active || 0 },
-        { name: 'Completed', value: data.overview?.engagements?.completed || 0 }
-      ].filter(d => d.value > 0);
-  
-  const PIE_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444'];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-600">Welcome back! Here's what's happening with your business.</p>
+        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Firm Dashboard</h1>
+        <p className="text-slate-500 mt-1">Overview of firm operations, workload, and billing.</p>
       </div>
 
-      {/* Stats Cards */}
+      {/* Top Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {statCards.map((stat) => (
-          <div key={stat.name} className="card">
-            <div className="flex items-center">
-              <div className={`p-3 rounded-lg ${stat.color}`}>
-                <stat.icon className="h-6 w-6 text-white" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">{stat.name}</p>
-                <p className="text-2xl font-semibold text-gray-900">{stat.value}</p>
-              </div>
+          <div key={stat.name} className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm flex items-center justify-between">
+            <div>
+              <p className="text-sm font-bold text-slate-500 uppercase">{stat.name}</p>
+              <p className="text-3xl font-black text-slate-800 mt-1">{stat.value}</p>
+            </div>
+            <div className={`p-4 rounded-full ${stat.color} bg-opacity-10`}>
+              <stat.icon className={`h-8 w-8 ${stat.textColor}`} />
             </div>
           </div>
         ))}
       </div>
 
-      {/* Charts Area */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="card">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Revenue Trend (YTD)</h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={revenueData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" />
-              <YAxis />
-              <Tooltip formatter={(value) => [`$${value.toLocaleString()}`, 'Revenue']} />
-              <Line type="monotone" dataKey="revenue" stroke="#3B82F6" strokeWidth={2} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="card">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Engagement Status</h3>
-          {statusData.length > 0 && statusData.some(d => d.value > 0) ? (
-            <ResponsiveContainer width="100%" height={300}>
+      {/* Analytics Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* Engagement Status Distribution */}
+        <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="text-lg font-bold text-slate-800 mb-6">Engagement Status</h3>
+          {statusChartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={250}>
               <PieChart>
                 <Pie
-                  data={statusData}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                  label={({ name, percent }) => `${name} ${((percent as number) * 100).toFixed(0)}%`}
+                  data={statusChartData}
+                  cx="50%" cy="50%" innerRadius={60} outerRadius={80}
+                  paddingAngle={5} dataKey="value"
                 >
-                  {statusData.map((entry, index) => (
+                  {statusChartData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <RechartsTooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
               </PieChart>
             </ResponsiveContainer>
           ) : (
-             <div className="h-[300px] flex items-center justify-center text-gray-400">
-               No engagement data available
-             </div>
+            <div className="h-[250px] flex items-center justify-center text-slate-400 text-sm">No active statuses.</div>
+          )}
+          <div className="flex flex-wrap justify-center gap-3 mt-4">
+            {statusChartData.map((entry, index) => (
+              <div key={entry.name} className="flex items-center text-xs text-slate-600 font-bold uppercase tracking-wider">
+                <span className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: PIE_COLORS[index % PIE_COLORS.length] }}></span>
+                {entry.name} ({entry.value})
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Team Workload Chart */}
+        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="text-lg font-bold text-slate-800 mb-6">Team Workload (Active Engagements)</h3>
+          {workload.length > 0 ? (
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={workload} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                <XAxis dataKey="user.firstName" axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 12 }} />
+                <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 12 }} />
+                <RechartsTooltip cursor={{ fill: '#F1F5F9' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                <Bar dataKey="activeEngagements" fill="#4F46E5" radius={[4, 4, 0, 0]} maxBarSize={50} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+             <div className="h-[280px] flex items-center justify-center text-slate-400 text-sm">No workload data available.</div>
           )}
         </div>
       </div>
 
-      {/* Bottom Section: Activity & Deadlines */}
+      {/* Activity & Deadlines Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
         {/* Recent Activity */}
-        <div className="card">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Activity</h3>
-          <div className="space-y-4">
-            {data.activity.length === 0 ? (
-              <p className="text-gray-500 text-center py-4">No recent activity</p>
+        <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="text-lg font-bold text-slate-800 mb-4">Firm Activity Log</h3>
+          <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+            {activity.length === 0 ? (
+              <p className="text-slate-500 text-center py-4">No recent activity.</p>
             ) : (
-              data.activity.slice(0, 5).map((activity, index) => (
-                <div key={activity.id || index} className="flex items-start space-x-3">
+              activity.slice(0, 8).map((log) => (
+                <div key={log.id} className="flex items-start space-x-3 p-3 hover:bg-slate-50 rounded-lg transition-colors border border-transparent hover:border-slate-100">
                   <div className="flex-shrink-0 mt-1">
-                    <CheckCircleIcon className="h-5 w-5 text-green-500" />
+                    <CheckCircleIcon className="h-5 w-5 text-indigo-500" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-900 font-medium">{activity.action.replace('_', ' ')}</p>
-                    <p className="text-xs text-gray-500">
-                       {activity.description} • {activity.user}
+                    <p className="text-sm text-slate-900 font-bold capitalize">{log.action.replace(/_/g, ' ').toLowerCase()}</p>
+                    <p className="text-xs text-slate-500 font-medium mt-0.5">
+                       {log.description}
                     </p>
-                    <p className="text-xs text-gray-400">
-                      {new Date(activity.timestamp).toLocaleString()}
-                    </p>
+                    <div className="flex justify-between items-center mt-1">
+                      <span className="text-xs text-indigo-600 font-bold">{log.user}</span>
+                      <span className="text-xs text-slate-400">{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {new Date(log.timestamp).toLocaleDateString()}</span>
+                    </div>
                   </div>
                 </div>
               ))
@@ -244,24 +216,32 @@ const Dashboard: React.FC = () => {
         </div>
 
         {/* Upcoming Deadlines */}
-        <div className="card">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Upcoming Deadlines</h3>
-          <div className="space-y-4">
-            {data.deadlines.length === 0 ? (
-              <p className="text-gray-500 text-center py-4">No upcoming deadlines</p>
+        <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm flex flex-col">
+          <h3 className="text-lg font-bold text-slate-800 mb-4">Upcoming Deadlines</h3>
+          <div className="space-y-3 flex-1">
+            {deadlines.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-slate-400 py-12">
+                <ClockIcon className="w-12 h-12 mb-2 opacity-50" />
+                <p>No immediate deadlines.</p>
+              </div>
             ) : (
-              data.deadlines.slice(0, 5).map((deadline, index) => (
-                <div key={deadline.id || index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              deadlines.slice(0, 6).map((deadline, index) => (
+                <div key={deadline.id || index} className="flex items-center justify-between p-4 bg-amber-50 border border-amber-100 rounded-lg">
                   <div className="flex items-center space-x-3">
-                    <ClockIcon className="h-5 w-5 text-gray-400" />
+                    <div className="p-2 bg-amber-100 text-amber-600 rounded">
+                      <ClockIcon className="h-5 w-5" />
+                    </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-900">{deadline.title || deadline.name || 'Untitled'}</p>
-                      <p className="text-xs text-gray-500">{deadline.type}</p>
+                      <p className="text-sm font-bold text-amber-900">{deadline.name}</p>
+                      <p className="text-xs font-semibold text-amber-700 mt-0.5 uppercase tracking-wider">{deadline.client || deadline.type}</p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-medium text-primary-600">
-                      {new Date(deadline.dueDate).toLocaleDateString()}
+                    <p className="text-sm font-black text-red-600">
+                      {new Date(deadline.deadline).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </p>
+                    <p className="text-[10px] font-bold text-amber-800 uppercase bg-amber-200 inline-block px-2 py-0.5 rounded mt-1">
+                      {deadline.status}
                     </p>
                   </div>
                 </div>
@@ -269,6 +249,7 @@ const Dashboard: React.FC = () => {
             )}
           </div>
         </div>
+
       </div>
     </div>
   );
