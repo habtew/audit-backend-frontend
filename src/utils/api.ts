@@ -109,6 +109,13 @@ async delete<T>(url: string, config?: any): Promise<T> {
   async signOffPreEngagement(preId: string, data: any) { return this.post<Types.ApiResponse<any>>(`/pre-engagements/${preId}/sign-off`, data); }
   async getPreEngagements() { return this.get<Types.ApiResponse<any[]>>('/pre-engagements'); }
   async getPreEngagementById(preId: string) { return this.get<Types.ApiResponse<any>>(`/pre-engagements/${preId}`); }
+  
+  // 👇 FIXED: Matches your class method syntax
+  async answerProcedure(preEngagementId: string, procedureId: string, data: FormData) {
+    return this.patch<Types.ApiResponse<any>>(`/pre-engagements/${preEngagementId}/procedures/${procedureId}`, data, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  }
  // ==========================================
   // 2. PLANNING & RISK PHASE
   // ==========================================
@@ -140,6 +147,17 @@ async delete<T>(url: string, config?: any): Promise<T> {
     `/planning/risks/${engagementId}/approve`
   );
 }
+
+// --- Planning File Uploads ---
+  // In src/utils/api.ts
+  async uploadPlanningEvidence(formData: FormData) {
+    // 👇 Points directly to the @Post('upload') route in PlanningController
+    return this.post<Types.ApiResponse<any>>(`/planning/upload`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  }
   // Complete Phase
   async completePlanning(engagementId: string) { return this.post<Types.ApiResponse<any>>(`/planning/${engagementId}/complete`); }
 
@@ -178,13 +196,25 @@ async delete<T>(url: string, config?: any): Promise<T> {
   async getDraftStatements(engagementId: string) { return this.get<Types.ApiResponse<any>>(`/trial-balances/${engagementId}/statements`); }
 
 
-  // ==========================================
+// ==========================================
   // 4. ACCOUNT MAPPING
   // ==========================================
-  async getMappingCategories() { return this.get<Types.ApiResponse<any>>('/mapping/categories'); }
+  async getTaxonomy() { return this.get<Types.ApiResponse<any>>('/mapping/taxonomy'); }
   async getMappingStats(tbId: string) { return this.get<Types.ApiResponse<any>>(`/mapping/trial-balance/${tbId}/stats`); }
-  async autoMapTrialBalance(tbId: string) { return this.post<Types.ApiResponse<any>>(`/mapping/trial-balance/${tbId}/auto-map`); }
-  async manualMapAccount(data: any) { return this.post<Types.ApiResponse<any>>('/mapping/manual', data); }
+  async getMappingsForTrialBalance(tbId: string, status?: string) { 
+    return this.get<Types.ApiResponse<any>>(`/mapping/trial-balance/${tbId}${status ? `?status=${status}` : ''}`); 
+  }
+  async getMappingSuggestions(accountId: string) { 
+    return this.get<Types.ApiResponse<any>>(`/mapping/suggestions/${accountId}`); 
+  }
+  async validateMappings(tbId: string, engagementId: string) { 
+    return this.get<Types.ApiResponse<any>>(`/mapping/trial-balance/${tbId}/validate?engagementId=${engagementId}`); 
+  }
+  async autoMapTrialBalance(tbId: string) { return this.post<Types.ApiResponse<any>>(`/mapping/trial-balance/${tbId}/auto-map`, {}); }
+  async manualMapAccount(data: { accountId: string; taxonomyNodeId: string; overrideReason?: string }) { 
+    return this.post<Types.ApiResponse<any>>('/mapping/manual', data); 
+  }
+  async approveMapping(mappingId: string) { return this.patch<Types.ApiResponse<any>>(`/mapping/${mappingId}/approve`, {}); }
   async exportMappings(tbId: string) { return this.get<Types.ApiResponse<any>>(`/mapping/trial-balance/${tbId}/export`); }
   
   // ==========================================
